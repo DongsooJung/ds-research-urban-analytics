@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# 수집 산출물
+snapshot*.csv
+*.snapshot.csv
+data/*.csv
+data/*.parquet
+
+# 환경 변수 (API 키)
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
