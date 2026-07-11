@@ -12,6 +12,11 @@ snapshot*.csv
 data/*.csv
 data/*.parquet
 
+# 생성된 대시보드
+dashboard.html
+demo.html
+*.dashboard.html
+
 # 환경 변수 (API 키)
 .env
 .env.local

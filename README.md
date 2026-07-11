@@ -71,6 +71,27 @@ print(congestion_ranking(df, top=10))    # 가장 붐비는 10곳
 print(weather_congestion_corr(df))       # 혼잡 vs 날씨/대기질 상관
 ```
 
+### 시각화 · Dashboard
+
+`viz.py`가 스냅샷 DataFrame → 자기완결형 HTML 대시보드(혼잡 순위·카테고리·연령분포·
+혼잡-환경 상관, Chart.js)를 생성한다.
+
+```bash
+# 라이브 수집 → 대시보드
+python scripts/dashboard.py --out dashboard.html
+
+# 저장된 스냅샷 CSV로부터
+python scripts/dashboard.py --csv snapshot.csv --out dashboard.html
+
+# 키 없이 차트 미리보기 (합성 데모 데이터)
+python scripts/dashboard.py --demo --out demo.html
+```
+
+```python
+from seoul_citydata.viz import generate_dashboard
+generate_dashboard(df, "dashboard.html")
+```
+
 ## 프로젝트 구조 · Structure
 
 ```
@@ -79,11 +100,15 @@ ds-research-urban-analytics/
 │   ├── api.py          # API 클라이언트 (병렬 수집)
 │   ├── parser.py       # 중첩 JSON → 평탄 레코드/DataFrame
 │   ├── analysis.py     # 순위·요약·상관·프로파일
+│   ├── viz.py          # 스냅샷 → HTML 대시보드 생성
 │   └── areas.py        # 120개 지역 큐레이션 목록 + 혼잡도 상수
-├── scripts/snapshot.py # 스냅샷 수집 CLI
+├── scripts/
+│   ├── snapshot.py     # 스냅샷 수집 CLI (CSV)
+│   └── dashboard.py    # HTML 대시보드 생성 CLI
 ├── tests/              # fixture 기반 단위 테스트 (네트워크 불필요)
 │   ├── fixtures/sample_citydata.json
-│   └── test_seoul_citydata.py
+│   ├── test_seoul_citydata.py
+│   └── test_viz.py
 ├── requirements.txt
 └── README.md
 ```
@@ -101,7 +126,7 @@ ds-research-urban-analytics/
 ## 테스트 · Tests
 
 ```bash
-pytest -q            # 23개 테스트 (fixture 기반, 네트워크 불필요)
+pytest -q            # 29개 테스트 (fixture 기반, 네트워크 불필요)
 ```
 
 ## 라이선스 · License
