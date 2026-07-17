@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>서울 실시간 도시데이터 · 2026-07-17 11:40</title>
+<meta name="description" content="서울 실시간 도시데이터 스냅샷 대시보드 — 혼잡·인구·날씨·상관 분석">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif;
+    background:#0a0e27;color:#e0e6f0;padding:24px;line-height:1.5}
+  h1{font-size:24px;color:#8ab4f8;margin-bottom:4px}
+  .sub{color:#8892b0;font-size:13px;margin-bottom:20px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px}
+  .kpi{background:#151933;border:1px solid #2a3354;border-radius:12px;padding:18px}
+  .kpi .label{font-size:12px;color:#8892b0;margin-bottom:6px}
+  .kpi .value{font-size:26px;font-weight:700;color:#8ab4f8}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+  .panel{background:#151933;border:1px solid #2a3354;border-radius:12px;padding:20px}
+  .panel h2{font-size:15px;color:#e0e6f0;margin-bottom:14px}
+  .panel.full{grid-column:1/-1}
+  .chart-box{position:relative;height:300px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:#8892b0;padding:8px;border-bottom:1px solid #2a3354}
+  td{padding:8px;border-bottom:1px solid #1e2547}
+  .corr-pos{color:#4ecca3}.corr-neg{color:#e94560}
+  @media(max-width:768px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <h1>🏙️ 서울 실시간 도시데이터 · 2026-07-17 11:40</h1>
+  <div class="sub" id="sub"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="grid">
+    <div class="panel"><h2>📊 혼잡 순위 (인구 추정 중앙값)</h2><div class="chart-box"><canvas id="rankChart"></canvas></div></div>
+    <div class="panel"><h2>🏷️ 카테고리별 평균 인구</h2><div class="chart-box"><canvas id="catChart"></canvas></div></div>
+  </div>
+  <div class="grid">
+    <div class="panel"><h2>👥 연령대 분포 (인구 가중)</h2><div class="chart-box"><canvas id="ageChart"></canvas></div></div>
+    <div class="panel"><h2>🔗 혼잡–환경 상관</h2><table id="corrTable"><thead><tr><th>지표</th><th>상관계수</th></tr></thead><tbody></tbody></table></div>
+  </div>
+
+<script>
+const D = {"stats": {"n_areas": 45, "total_ppltn_min": 764000.0, "total_ppltn_max": 822500.0, "mean_congest_score": 1.511111111111111, "n_crowded": 6, "crowded_areas": ["잠실 관광특구", "고속터미널역", "국립중앙박물관·용산가족공원", "뚝섬한강공원", "월드컵공원", "잠실역"], "mean_pm10": 40.63636363636363, "mean_temp": 30.397727272727273}, "ranking": [{"area": "잠실 관광특구", "ppltn": 71000.0, "level": "약간 붐빔", "score": 3}, {"area": "여의도", "ppltn": 69000.0, "level": "여유", "score": 1}, {"area": "홍대 관광특구", "ppltn": 59000.0, "level": "여유", "score": 1}, {"area": "명동 관광특구", "ppltn": 45000.0, "level": "여유", "score": 1}, {"area": "강남역", "ppltn": 43000.0, "level": "여유", "score": 1}, {"area": "잠실역", "ppltn": 39000.0, "level": "약간 붐빔", "score": 3}, {"area": "고속터미널역", "ppltn": 29000.0, "level": "붐빔", "score": 4}, {"area": "종로·청계 관광특구", "ppltn": 29000.0, "level": "보통", "score": 2}, {"area": "동대문 관광특구", "ppltn": 27000.0, "level": "보통", "score": 2}, {"area": "강남 MICE 관광특구", "ppltn": 25000.0, "level": "보통", "score": 2}, {"area": "신촌·이대역", "ppltn": 25000.0, "level": "여유", "score": 1}, {"area": "건대입구역", "ppltn": 25000.0, "level": "여유", "score": 1}, {"area": "압구정로데오거리", "ppltn": 23000.0, "level": "여유", "score": 1}, {"area": "성수카페거리", "ppltn": 23000.0, "level": "보통", "score": 2}, {"area": "가로수길", "ppltn": 21000.0, "level": "여유", "score": 1}], "categories": [{"category": "관광특구", "ppltn": 37750.0, "congest": 1.7142857142857142, "count": 7}, {"category": "인구밀집지역", "ppltn": 18225.0, "congest": 1.4, "count": 10}, {"category": "발달상권", "ppltn": 17229.166666666668, "congest": 1.1666666666666667, "count": 12}, {"category": "교통거점", "ppltn": 14875.0, "congest": 1.5, "count": 4}, {"category": "고궁·문화유산", "ppltn": 9050.0, "congest": 1.0, "count": 5}, {"category": "공원", "ppltn": 5035.714285714285, "congest": 2.4285714285714284, "count": 7}], "age": [1.3653955247399936, 8.22209265679168, 19.040403403718877, 19.66555310431768, 18.647084777812797, 15.126063662149386, 10.373148439962181, 7.5537661519067125], "age_labels": ["0대", "10대", "20대", "30대", "40대", "50대", "60대", "70+"], "corr": [{"metric": "temp", "corr": 0.19061106033685793}, {"metric": "humidity", "corr": -0.00135683491700539}, {"metric": "pm10", "corr": 0.123301234450349}, {"metric": "pm25", "corr": 0.05471274076239426}, {"metric": "uv_index", "corr": null}, {"metric": "road_spd", "corr": 0.3795403398707288}]};
+
+// KPI
+const s = D.stats;
+document.getElementById('sub').textContent =
+  `지역 ${s.n_areas}곳 · 총 인구(추정) ${Math.round(s.total_ppltn_min).toLocaleString()}~${Math.round(s.total_ppltn_max).toLocaleString()}명`;
+const kpis = [
+  ['지역 수', s.n_areas],
+  ['평균 혼잡점수', (s.mean_congest_score||0).toFixed(2)+' / 4'],
+  ['붐빔 지역', s.n_crowded+'곳'],
+  ['평균 PM10', s.mean_pm10==null?'—':s.mean_pm10.toFixed(0)],
+];
+document.getElementById('kpis').innerHTML = kpis.map(k=>
+  `<div class="kpi"><div class="label">${k[0]}</div><div class="value">${k[1]}</div></div>`).join('');
+
+const gridColor='#2a3354', tick='#8892b0';
+const axis=(extra={})=>Object.assign({ticks:{color:tick},grid:{color:gridColor}},extra);
+
+// 혼잡 순위 (수평 막대)
+new Chart(document.getElementById('rankChart'),{
+  type:'bar',
+  data:{labels:D.ranking.map(r=>r.area),
+    datasets:[{label:'인구(중앙값)',data:D.ranking.map(r=>r.ppltn),
+      backgroundColor:'#4a6fdc',borderRadius:4}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:axis(),y:{ticks:{color:tick,font:{size:10}},grid:{display:false}}}}
+});
+
+// 카테고리별 평균 인구
+new Chart(document.getElementById('catChart'),{
+  type:'bar',
+  data:{labels:D.categories.map(c=>c.category),
+    datasets:[{label:'평균 인구',data:D.categories.map(c=>c.ppltn),
+      backgroundColor:'#8b5cf6',borderRadius:4}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{ticks:{color:tick,font:{size:10}},grid:{display:false}},y:axis()}}
+});
+
+// 연령대 분포
+new Chart(document.getElementById('ageChart'),{
+  type:'bar',
+  data:{labels:D.age_labels,
+    datasets:[{label:'비율(%)',data:D.age,
+      backgroundColor:'#4ecca3',borderRadius:4}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{ticks:{color:tick},grid:{display:false}},y:axis()}}
+});
+
+// 상관 테이블
+const NAMES={temp:'기온',humidity:'습도',pm10:'PM10',pm25:'PM2.5',uv_index:'자외선',road_spd:'도로속도'};
+document.querySelector('#corrTable tbody').innerHTML = D.corr.map(c=>{
+  const v=c.corr;
+  const cls=v==null?'':(v>=0?'corr-pos':'corr-neg');
+  const txt=v==null?'—':v.toFixed(3);
+  return `<tr><td>${NAMES[c.metric]||c.metric}</td><td class="${cls}">${txt}</td></tr>`;
+}).join('');
+</script>
+</body>
+</html>
