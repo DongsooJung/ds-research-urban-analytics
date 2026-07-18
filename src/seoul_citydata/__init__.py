@@ -28,6 +28,15 @@ from .analysis import (
     summary_stats,
 )
 from .areas import ALL_AREAS, AREAS_BY_CATEGORY, CONGEST_LEVELS, congestion_score
+from .subway import (
+    MONITORED_STATIONS,
+    SubwayAPIError,
+    build_arrival_url,
+    build_subway_dashboard_data,
+    fetch_many_station_arrivals,
+    fetch_station_arrivals,
+    get_subway_api_key,
+)
 
 __all__ = [
     "fetch_citydata", "fetch_many", "get_api_key", "SeoulAPIError",
@@ -37,4 +46,7 @@ __all__ = [
     "demographic_profile", "gender_balance", "weather_congestion_corr",
     "summary_stats",
     "ALL_AREAS", "AREAS_BY_CATEGORY", "CONGEST_LEVELS", "congestion_score",
+    "MONITORED_STATIONS", "SubwayAPIError", "build_arrival_url",
+    "build_subway_dashboard_data", "fetch_many_station_arrivals",
+    "fetch_station_arrivals", "get_subway_api_key",
 ]

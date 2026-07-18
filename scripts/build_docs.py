@@ -25,6 +25,11 @@ import pandas as pd  # noqa: E402
 
 from seoul_citydata.areas import ALL_AREAS  # noqa: E402
 from seoul_citydata.parser import to_record  # noqa: E402
+from seoul_citydata.subway import (  # noqa: E402
+    MONITORED_STATIONS,
+    build_subway_dashboard_data,
+    fetch_many_station_arrivals,
+)
 from seoul_citydata.viz import write_pages_dashboard  # noqa: E402
 
 BASE = "http://openapi.seoul.go.kr:8088"
@@ -58,6 +63,11 @@ def main(argv=None) -> int:
         print("::error::SEOUL_API_KEY 미설정(또는 sample). 실데이터 수집 불가.")
         return 2
 
+    subway_key = os.environ.get("SEOUL_SUBWAY_API_KEY")
+    if not subway_key or subway_key == "sample":
+        print("::error::SEOUL_SUBWAY_API_KEY 미설정(또는 sample). 실시간 지하철 수집 불가.")
+        return 2
+
     records = []
     ok = 0
     for i, area in enumerate(ALL_AREAS, 1):
@@ -75,11 +85,31 @@ def main(argv=None) -> int:
         )
         return 1
 
+    print(f"[subway] {len(MONITORED_STATIONS)}개 주요역 도착정보 수집 중...", flush=True)
+    subway_responses = fetch_many_station_arrivals(MONITORED_STATIONS, subway_key)
+    subway_ok = sum(1 for station in MONITORED_STATIONS if subway_responses.get(station))
+    min_subway_stations = 6
+    if subway_ok < min_subway_stations:
+        print(
+            f"::error::지하철 수집 품질 검증 실패: {subway_ok}/{len(MONITORED_STATIONS)}개 역 "
+            f"(최소 {min_subway_stations}개 필요). 기존 대시보드를 보존합니다."
+        )
+        return 1
+    subway_data = build_subway_dashboard_data(subway_responses)
+
     df = pd.DataFrame(records)
-    idx, data = write_pages_dashboard(df, args.docs, generated_at=args.generated_at)
+    idx, data = write_pages_dashboard(
+        df,
+        args.docs,
+        generated_at=args.generated_at,
+        subway_data=subway_data,
+    )
     # Jekyll 비활성화 파일 보장
     Path(args.docs, ".nojekyll").touch()
-    print(f"[OK] {ok}/{len(ALL_AREAS)}개 지역 → {idx}, {data}")
+    print(
+        f"[OK] 도시 {ok}/{len(ALL_AREAS)}개 지역·지하철 "
+        f"{subway_ok}/{len(MONITORED_STATIONS)}개 역 → {idx}, {data}"
+    )
     return 0
 
 

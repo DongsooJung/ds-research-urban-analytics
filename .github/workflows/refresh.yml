@@ -32,6 +32,7 @@ jobs:
       - name: Build dashboard (fetch live data)
         env:
           SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
+          SEOUL_SUBWAY_API_KEY: ${{ secrets.SEOUL_SUBWAY_API_KEY }}
         run: |
           python scripts/build_docs.py --min-areas 40 --generated-at "$(date -u '+%Y-%m-%d %H:%M UTC')"
 

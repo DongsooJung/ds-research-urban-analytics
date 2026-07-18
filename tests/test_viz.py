@@ -95,6 +95,8 @@ class TestPagesDashboard:
         assert "loadData" in html
         assert "setInterval(()=>loadData(false),5*60*1000)" in html
         assert "갱신 지연 · 마지막 정상 데이터" in html
+        assert "주요역 실시간 도착정보" in html
+        assert "subwayBoard" in html
         assert "__ADMIN_URL__" not in html  # placeholder 치환됨
         assert "actions/workflows/refresh.yml" in html  # 관리자 링크
 
@@ -105,6 +107,13 @@ class TestPagesDashboard:
         assert d["stats"]["n_areas"] == len(df)
         assert d["generated_at"] == "2026 UTC"
         assert "NaN" not in Path(data).read_text(encoding="utf-8")
+
+    def test_data_json_includes_subway(self, df, tmp_path):
+        from seoul_citydata.viz import write_pages_dashboard
+        subway = {"station_count": 1, "board": []}
+        _, data = write_pages_dashboard(df, str(tmp_path), subway_data=subway)
+        payload = json.loads(Path(data).read_text(encoding="utf-8"))
+        assert payload["subway"] == subway
 
 
 if __name__ == "__main__":
