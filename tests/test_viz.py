@@ -71,5 +71,30 @@ class TestGenerate:
         assert "const D =" in html
 
 
+class TestPagesDashboard:
+    def test_writes_shell_and_data(self, df, tmp_path):
+        from seoul_citydata.viz import write_pages_dashboard
+        idx, data = write_pages_dashboard(df, str(tmp_path), generated_at="X")
+        assert Path(idx).exists() and Path(data).exists()
+
+    def test_shell_fetches_json(self, df, tmp_path):
+        from seoul_citydata.viz import write_pages_dashboard
+        idx, _ = write_pages_dashboard(df, str(tmp_path))
+        html = Path(idx).read_text(encoding="utf-8")
+        # 셸은 데이터를 인라인이 아니라 fetch로 로드
+        assert "data.json" in html
+        assert "loadData" in html
+        assert "__ADMIN_URL__" not in html  # placeholder 치환됨
+        assert "actions/workflows/refresh.yml" in html  # 관리자 링크
+
+    def test_data_json_valid(self, df, tmp_path):
+        from seoul_citydata.viz import write_pages_dashboard
+        _, data = write_pages_dashboard(df, str(tmp_path), generated_at="2026 UTC")
+        d = json.loads(Path(data).read_text(encoding="utf-8"))
+        assert d["stats"]["n_areas"] == len(df)
+        assert d["generated_at"] == "2026 UTC"
+        assert "NaN" not in Path(data).read_text(encoding="utf-8")
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

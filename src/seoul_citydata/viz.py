@@ -53,6 +53,10 @@ def build_dashboard_data(df: pd.DataFrame) -> dict[str, Any]:
         for k, v in corr.items()
     ]
 
+    snapshot_time = ""
+    if "ppltn_time" in df.columns and df["ppltn_time"].notna().any():
+        snapshot_time = str(df["ppltn_time"].dropna().iloc[0])
+
     return {
         "stats": stats,
         "ranking": rank_data,
@@ -60,7 +64,36 @@ def build_dashboard_data(df: pd.DataFrame) -> dict[str, Any]:
         "age": age_data,
         "age_labels": AGE_LABELS,
         "corr": corr_data,
+        "snapshot_time": snapshot_time,
     }
+
+
+def write_pages_dashboard(df: pd.DataFrame, docs_dir: str = "docs",
+                          generated_at: str = "") -> tuple[str, str]:
+    """GitHub Pages용 셸+데이터 분리 배포 파일 생성.
+
+    data.json(집계 데이터) + index.html(셸)을 docs_dir에 쓴다.
+    셸은 로드 시 data.json을 fetch해 렌더하며, 새로고침 버튼으로 재요청한다.
+
+    Returns:
+        (index_path, data_path)
+    """
+    import os
+
+    os.makedirs(docs_dir, exist_ok=True)
+    data = build_dashboard_data(df)
+    if generated_at:
+        data["generated_at"] = generated_at
+
+    data_path = os.path.join(docs_dir, "data.json")
+    with open(data_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+
+    index_path = os.path.join(docs_dir, "index.html")
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(_SHELL_TEMPLATE)
+
+    return index_path, data_path
 
 
 def generate_dashboard(df: pd.DataFrame, out_path: str = "dashboard.html",
@@ -183,3 +216,154 @@ document.querySelector('#corrTable tbody').innerHTML = D.corr.map(c=>{
 </script>
 </body>
 </html>"""
+
+
+# GitHub Pages 셸 — data.json을 fetch해 렌더 + 수동 새로고침 버튼
+_ADMIN_WORKFLOW_URL = (
+    "https://github.com/DongsooJung/ds-research-urban-analytics/"
+    "actions/workflows/refresh.yml"
+)
+
+_SHELL_TEMPLATE = """<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>서울 실시간 도시데이터 대시보드</title>
+<meta name="description" content="서울 실시간 도시데이터 스냅샷 대시보드 — 혼잡·인구·날씨·상관 분석 (자동 갱신)">
+<meta property="og:title" content="서울 실시간 도시데이터 대시보드">
+<meta property="og:description" content="서울시 핫스팟 실시간 인구·혼잡·날씨·상권 스냅샷">
+<meta property="og:type" content="website">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif;
+    background:#0a0e27;color:#e0e6f0;padding:24px;line-height:1.5}
+  h1{font-size:24px;color:#8ab4f8;margin-bottom:4px}
+  .bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+  .sub{color:#8892b0;font-size:13px}
+  .btn{background:#1e2547;border:1px solid #2a3354;color:#b4c2f5;font-size:13px;font-family:inherit;
+    padding:9px 14px;border-radius:8px;cursor:pointer;transition:.15s}
+  .btn:hover{border-color:#8ab4f8;background:#243060}
+  .btn:disabled{opacity:.6;cursor:default}
+  .btn.ghost{background:transparent}
+  .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  a{color:#8ab4f8;text-decoration:none}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px}
+  .kpi{background:#151933;border:1px solid #2a3354;border-radius:12px;padding:18px}
+  .kpi .label{font-size:12px;color:#8892b0;margin-bottom:6px}
+  .kpi .value{font-size:24px;font-weight:700;color:#8ab4f8}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+  .panel{background:#151933;border:1px solid #2a3354;border-radius:12px;padding:20px}
+  .panel h2{font-size:15px;color:#e0e6f0;margin-bottom:6px}
+  .panel .cap{font-size:12px;color:#8892b0;margin-bottom:12px}
+  .panel.full{grid-column:1/-1}
+  .chart-box{position:relative;width:100%}
+  .legend{display:flex;gap:12px;font-size:12px;color:#8892b0;flex-wrap:wrap;margin-bottom:10px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:#8892b0;padding:8px;border-bottom:1px solid #2a3354}
+  td{padding:8px;border-bottom:1px solid #1e2547}
+  .corr-pos{color:#4ecca3}.corr-neg{color:#e94560}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 12px;border-radius:8px}
+  #err{color:#e94560;font-size:13px;margin:8px 0}
+  @media(max-width:768px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <div>
+      <h1>🏙️ 서울 실시간 도시데이터 대시보드</h1>
+      <div class="sub" id="sub">불러오는 중…</div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="refresh" onclick="loadData(true)">🔄 새로고침</button>
+      <a class="btn ghost" href="__ADMIN_URL__" target="_blank" rel="noopener" title="관리자: 서울 API에서 최신 데이터 재수집 (GitHub Actions 수동 실행)">⚙ 지금 수집</a>
+    </div>
+  </div>
+  <div id="err"></div>
+
+  <div class="kpis" id="kpis"></div>
+  <div class="grid">
+    <div class="panel full">
+      <h2>혼잡 순위</h2>
+      <div class="cap">막대 = 인구 추정 중앙값(명) · 색 = 혼잡 등급</div>
+      <div class="legend" id="legend"></div>
+      <div class="chart-box" id="rankBox"><canvas id="rankChart" role="img" aria-label="지역별 인구 가로 막대, 색은 혼잡 등급"></canvas></div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="panel"><h2>연령대 분포</h2><div class="cap">인구 가중 평균(%)</div>
+      <div class="chart-box" style="height:260px"><canvas id="ageChart" role="img" aria-label="연령대별 유동인구 비율"></canvas></div></div>
+    <div class="panel"><h2>혼잡–환경 상관</h2><div class="cap">혼잡 점수와 환경 지표의 상관계수</div>
+      <div id="corr" style="display:flex;flex-wrap:wrap;gap:10px"></div></div>
+  </div>
+
+<script>
+const LVL={"여유":"#0ca30c","보통":"#fab219","약간 붐빔":"#ec835a","붐빔":"#d03b3b"};
+const fmt=n=>Math.round(n).toLocaleString();
+let charts={};
+
+function loadData(manual){
+  const btn=document.getElementById('refresh');
+  if(manual){btn.disabled=true;btn.textContent='불러오는 중…';}
+  fetch('./data.json?t='+Date.now(),{cache:'no-store'})
+    .then(r=>{if(!r.ok)throw new Error('data.json '+r.status);return r.json();})
+    .then(D=>{render(D);document.getElementById('err').textContent='';})
+    .catch(e=>{document.getElementById('err').textContent='데이터 로드 실패: '+e.message;})
+    .finally(()=>{if(manual){btn.disabled=false;btn.textContent='🔄 새로고침';}});
+}
+
+function render(D){
+  const now=new Date().toLocaleString('ko-KR',{hour12:false});
+  const snap=D.snapshot_time||'';
+  const gen=D.generated_at?(' · 생성 '+D.generated_at):'';
+  document.getElementById('sub').textContent=
+    `데이터 기준 ${snap}${gen} · 지역 ${D.stats.n_areas}곳 · 마지막 확인 ${now}`;
+
+  const s=D.stats;
+  const kpis=[['지역 수',s.n_areas],
+    ['총 인구(추정)',fmt(s.total_ppltn_min)+'~'+fmt(s.total_ppltn_max)],
+    ['평균 혼잡점수',(s.mean_congest_score||0).toFixed(2)+' / 4'],
+    ['평균 기온',s.mean_temp==null?'—':s.mean_temp.toFixed(1)+'°C']];
+  document.getElementById('kpis').innerHTML=kpis.map(k=>
+    `<div class="kpi"><div class="label">${k[0]}</div><div class="value">${k[1]}</div></div>`).join('');
+
+  document.getElementById('legend').innerHTML=Object.entries(LVL).map(([k,v])=>
+    `<span><span class="dot" style="background:${v}"></span>${k}</span>`).join('');
+
+  const R=D.ranking;
+  document.getElementById('rankBox').style.height=(R.length*34+60)+'px';
+  Object.values(charts).forEach(c=>c&&c.destroy());
+  charts.rank=new Chart(document.getElementById('rankChart'),{
+    type:'bar',
+    data:{labels:R.map(d=>d.area),datasets:[{data:R.map(d=>d.ppltn),
+      backgroundColor:R.map(d=>LVL[d.level]||'#888'),borderRadius:4,barThickness:20}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmt(c.raw)+'명 · '+R[c.dataIndex].level}}},
+      scales:{x:{ticks:{color:'#8892b0',callback:v=>fmt(v)},grid:{color:'#1e2547'}},
+        y:{ticks:{color:'#b4c2f5',font:{size:11}},grid:{display:false}}}}
+  });
+
+  charts.age=new Chart(document.getElementById('ageChart'),{
+    type:'bar',
+    data:{labels:D.age_labels,datasets:[{data:D.age,backgroundColor:'#4a6fdc',borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw.toFixed(1)+'%'}}},
+      scales:{x:{ticks:{color:'#8892b0'},grid:{display:false}},
+        y:{ticks:{color:'#8892b0',callback:v=>v+'%'},grid:{color:'#1e2547'}}}}
+  });
+
+  const NAMES={temp:'기온',humidity:'습도',pm10:'PM10',pm25:'PM2.5',uv_index:'자외선',road_spd:'도로속도'};
+  document.getElementById('corr').innerHTML=D.corr.map(c=>{
+    if(c.corr==null)return '';
+    const pos=c.corr>=0,bg=pos?'#12294a':'#3a1520',fg=pos?'#8ab4f8':'#e98aa0';
+    return `<span class="chip" style="background:${bg};color:${fg}">${NAMES[c.metric]||c.metric} <b>${pos?'+':''}${c.corr.toFixed(2)}</b></span>`;
+  }).join('');
+}
+
+loadData(false);
+</script>
+</body>
+</html>""".replace("__ADMIN_URL__", _ADMIN_WORKFLOW_URL)
