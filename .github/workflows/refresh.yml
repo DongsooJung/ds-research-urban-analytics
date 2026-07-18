@@ -2,8 +2,8 @@ name: 서울 실시간 도시데이터 대시보드 갱신
 
 on:
   schedule:
-    # 3시간마다 (UTC). 필요시 cron 조정
-    - cron: '0 */3 * * *'
+    # 45개 대표 지역을 매시간 갱신. 정각 Actions 대기열을 피해 17분에 실행.
+    - cron: '17 * * * *'
   workflow_dispatch:  # 수동 실행 (대시보드 "지금 수집" 버튼이 이 페이지로 연결)
 
 permissions:
@@ -16,7 +16,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,13 +27,13 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        run: pip install pandas numpy
+        run: python -m pip install -r requirements.txt
 
       - name: Build dashboard (fetch live data)
         env:
           SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
         run: |
-          python scripts/build_docs.py --generated-at "$(date -u '+%Y-%m-%d %H:%M UTC')"
+          python scripts/build_docs.py --min-areas 40 --generated-at "$(date -u '+%Y-%m-%d %H:%M UTC')"
 
       - name: Commit & push if changed
         run: |
