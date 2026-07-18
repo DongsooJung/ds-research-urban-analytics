@@ -49,6 +49,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Pages 대시보드 빌드")
     ap.add_argument("--docs", default="docs", help="출력 디렉토리")
     ap.add_argument("--generated-at", default="", help="생성 시각 라벨(UTC 등)")
+    ap.add_argument("--min-areas", type=int, default=40,
+                    help="기존 대시보드를 교체할 최소 성공 지역 수")
     args = ap.parse_args(argv)
 
     key = os.environ.get("SEOUL_API_KEY")
@@ -65,8 +67,12 @@ def main(argv=None) -> int:
             ok += 1
         print(f"[{i}/{len(ALL_AREAS)}] {'OK ' if d else 'skip'} {area} (누적 {ok})", flush=True)
 
-    if not records:
-        print("::error::수집된 지역이 없습니다.")
+    unique_areas = len({r.get("area") for r in records if r.get("area")})
+    if unique_areas < args.min_areas:
+        print(
+            f"::error::수집 품질 검증 실패: 고유 지역 {unique_areas}개 "
+            f"(최소 {args.min_areas}개 필요). 기존 대시보드를 보존합니다."
+        )
         return 1
 
     df = pd.DataFrame(records)

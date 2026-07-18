@@ -33,7 +33,14 @@ def df():
 class TestBuildData:
     def test_keys(self, df):
         d = build_dashboard_data(df)
-        assert set(d.keys()) >= {"stats", "ranking", "categories", "age", "age_labels", "corr"}
+        assert set(d.keys()) >= {"meta", "stats", "ranking", "categories", "age", "age_labels", "corr"}
+
+    def test_live_metadata(self, df):
+        df["ppltn_time"] = ["2026-07-19 10:00", "2026-07-19 10:05", None]
+        d = build_dashboard_data(df, source_mode="api")
+        assert d["meta"]["source_mode"] == "api"
+        assert d["meta"]["data_updated_at"] == "2026-07-19 10:05"
+        assert "+09:00" in d["meta"]["generated_at"]
 
     def test_ranking_sorted(self, df):
         d = build_dashboard_data(df)
@@ -60,6 +67,8 @@ class TestGenerate:
         html = out.read_text(encoding="utf-8")
         assert "<!DOCTYPE html>" in html
         assert "Chart" in html
+        assert "5 * 60 * 1000" in html
+        assert "최신 데이터 확인" in html
         assert "__DATA__" not in html  # placeholder 치환됨
         assert "__TITLE__" not in html
 
@@ -84,6 +93,8 @@ class TestPagesDashboard:
         # 셸은 데이터를 인라인이 아니라 fetch로 로드
         assert "data.json" in html
         assert "loadData" in html
+        assert "setInterval(()=>loadData(false),5*60*1000)" in html
+        assert "갱신 지연 · 마지막 정상 데이터" in html
         assert "__ADMIN_URL__" not in html  # placeholder 치환됨
         assert "actions/workflows/refresh.yml" in html  # 관리자 링크
 

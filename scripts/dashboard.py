@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import sys
 import argparse
+import os
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -73,28 +75,55 @@ def main(argv=None) -> int:
     ap.add_argument("--csv", help="저장된 스냅샷 CSV 경로")
     ap.add_argument("--demo", action="store_true", help="합성 데모 데이터로 생성")
     ap.add_argument("--category", help="라이브 수집 시 특정 카테고리만")
+    ap.add_argument("--require-key", action="store_true",
+                    help="SEOUL_API_KEY가 없으면 실패(자동 배포용)")
+    ap.add_argument("--min-areas", type=int, default=1,
+                    help="성공으로 수집되어야 할 최소 지역 수")
     ap.add_argument("--out", default="dashboard.html", help="HTML 출력 경로")
     args = ap.parse_args(argv)
 
     if args.demo:
         df = demo_dataframe()
         note = "데모(합성) 데이터"
+        source_mode = "demo"
     elif args.csv:
         df = pd.read_csv(args.csv)
         note = f"CSV: {args.csv}"
+        source_mode = "csv"
     else:
         areas = AREAS_BY_CATEGORY.get(args.category, ALL_AREAS) if args.category else ALL_AREAS
         key = get_api_key()
+        if args.require_key and (key == "sample" or not os.environ.get("SEOUL_API_KEY", "").strip()):
+            print("[!] SEOUL_API_KEY가 없어 라이브 대시보드 생성을 중단합니다.", file=sys.stderr)
+            return 2
         note = "라이브 수집(sample 고정값)" if key == "sample" else "라이브 수집(개인 키)"
+        source_mode = "sample" if key == "sample" else "api"
         print(f"[i] {len(areas)}개 지역 수집 중... ({note})")
         df = to_dataframe(fetch_many(areas))
 
-    if df.empty:
-        print("데이터 없음")
+    unique_areas = int(df["area"].nunique()) if "area" in df.columns else 0
+    if df.empty or unique_areas < args.min_areas:
+        print(
+            f"[!] 데이터 품질 검증 실패: 고유 지역 {unique_areas}개 "
+            f"(최소 {args.min_areas}개 필요). 기존 대시보드를 보존합니다.",
+            file=sys.stderr,
+        )
         return 1
 
-    out = generate_dashboard(df, args.out)
-    print(f"[✓] 대시보드 생성: {out}  ({note}, {len(df)}개 지역)")
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # 생성 중 오류가 나면 기존 정상 파일을 덮어쓰지 않는다.
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".html", dir=out_path.parent, delete=False, encoding="utf-8"
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        generate_dashboard(df, str(tmp_path), source_mode=source_mode)
+        tmp_path.replace(out_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    out = str(out_path)
+    print(f"[OK] 대시보드 생성: {out}  ({note}, {len(df)}개 지역)")
     return 0
 
 

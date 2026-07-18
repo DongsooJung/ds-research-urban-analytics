@@ -44,6 +44,19 @@ export SEOUL_API_KEY="발급받은_인증키"      # Windows(PowerShell): $env:S
 - 키 **미설정 시** `sample` 키로 동작 → 지역과 무관하게 **동일한 고정 샘플**을 반환한다
   (구조 확인·파이프라인 점검용). 지역별 실데이터는 개인 키가 필요하다.
 
+### 운영 대시보드 자동 갱신
+
+`.github/workflows/refresh.yml`이 매시간 45개 대표 지역을 새로
+수집해 `docs/data.json`과 `docs/index.html`을 갱신한다. 대시보드는 5분마다 최신 배포본을
+자동 확인한다. API 키는 브라우저나 HTML에 넣지 않고 GitHub Actions 시크릿
+`SEOUL_API_KEY`로만 관리한다.
+
+수집 성공 지역이 40개 미만이거나 키가 없으면 작업은 실패하고 기존의 마지막
+정상 대시보드를 보존한다.
+
+1. 저장소 `Settings → Secrets and variables → Actions`에 `SEOUL_API_KEY` 등록
+2. `Actions → 서울 실시간 도시데이터 대시보드 갱신 → Run workflow`로 수동 실행
+
 ## 빠른 시작 · Quick Start
 
 ```bash
