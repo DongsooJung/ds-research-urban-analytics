@@ -84,8 +84,12 @@ def build_dashboard_data(
     }
 
 
-def write_pages_dashboard(df: pd.DataFrame, docs_dir: str = "docs",
-                          generated_at: str = "") -> tuple[str, str]:
+def write_pages_dashboard(
+    df: pd.DataFrame,
+    docs_dir: str = "docs",
+    generated_at: str = "",
+    subway_data: dict[str, Any] | None = None,
+) -> tuple[str, str]:
     """GitHub Pages용 셸+데이터 분리 배포 파일 생성.
 
     data.json(집계 데이터) + index.html(셸)을 docs_dir에 쓴다.
@@ -100,6 +104,8 @@ def write_pages_dashboard(df: pd.DataFrame, docs_dir: str = "docs",
     data = build_dashboard_data(df, source_mode="api")
     if generated_at:
         data["generated_at"] = generated_at
+    if subway_data is not None:
+        data["subway"] = subway_data
 
     data_path = os.path.join(docs_dir, "data.json")
     with open(data_path, "w", encoding="utf-8") as f:
@@ -285,9 +291,9 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>서울 실시간 도시데이터 대시보드</title>
-<meta name="description" content="서울 실시간 도시데이터 스냅샷 대시보드 — 혼잡·인구·날씨·상관 분석 (자동 갱신)">
+<meta name="description" content="서울 실시간 도시·지하철 대시보드 — 혼잡·인구·날씨·주요역 도착정보 자동 갱신">
 <meta property="og:title" content="서울 실시간 도시데이터 대시보드">
-<meta property="og:description" content="서울시 핫스팟 실시간 인구·혼잡·날씨·상권 스냅샷">
+<meta property="og:description" content="서울시 핫스팟 인구·혼잡·날씨와 주요 지하철역 실시간 도착정보">
 <meta property="og:type" content="website">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -313,6 +319,10 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
   .kpi{background:#151933;border:1px solid #2a3354;border-radius:12px;padding:18px}
   .kpi .label{font-size:12px;color:#8892b0;margin-bottom:6px}
   .kpi .value{font-size:24px;font-weight:700;color:#8ab4f8}
+  .section-head{display:flex;justify-content:space-between;align-items:end;gap:14px;flex-wrap:wrap;
+    margin:34px 0 14px;padding-top:24px;border-top:1px solid #1e2547}
+  .section-head h2{font-size:20px;color:#e0e6f0}
+  .source{font-size:12px;color:#8892b0}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
   .panel{background:#151933;border:1px solid #2a3354;border-radius:12px;padding:20px}
   .panel h2{font-size:15px;color:#e0e6f0;margin-bottom:6px}
@@ -325,6 +335,12 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
   table{width:100%;border-collapse:collapse;font-size:13px}
   th{text-align:left;color:#8892b0;padding:8px;border-bottom:1px solid #2a3354}
   td{padding:8px;border-bottom:1px solid #1e2547}
+  .table-wrap{overflow-x:auto}
+  .line-pill{display:inline-flex;align-items:center;white-space:nowrap;border-radius:999px;
+    padding:3px 8px;color:#fff;font-size:11px;font-weight:700}
+  .arrival.near td{background:rgba(78,204,163,.045)}
+  .arrival-message{font-weight:650;color:#dce7f9;white-space:nowrap}
+  .muted{color:#8892b0;font-size:12px}
   .corr-pos{color:#4ecca3}.corr-neg{color:#e94560}
   .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 12px;border-radius:8px}
   #err{color:#e94560;font-size:13px;margin:8px 0}
@@ -346,6 +362,38 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
   <div id="err"></div>
 
   <div class="kpis" id="kpis"></div>
+
+  <section id="subwayRoot" hidden>
+    <div class="section-head">
+      <div>
+        <h2>🚇 주요역 실시간 도착정보</h2>
+        <div class="sub" id="subwaySub"></div>
+      </div>
+      <div class="source" id="subwaySource"></div>
+    </div>
+    <div class="kpis" id="subwayKpis"></div>
+    <div class="grid">
+      <div class="panel">
+        <h2>노선별 도착예보 열차</h2>
+        <div class="cap">8개 표본역 API 응답에 포함된 고유 열차 수</div>
+        <div class="chart-box" id="subwayChartBox"><canvas id="subwayChart" role="img" aria-label="노선별 실시간 도착예보 열차 수"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>수집 범위·해석 안내</h2>
+        <div class="cap">전체 서울 지하철이 아닌 주요 환승·상권·관광역 표본입니다.</div>
+        <div id="subwayCoverage" class="muted"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:18px">
+      <h2>실시간 도착 전광판</h2>
+      <div class="cap">API 도착 메시지·수신시각 기준 · 역당 최대 2건</div>
+      <div class="table-wrap">
+        <table><thead><tr><th>역</th><th>노선</th><th>방향·행선</th><th>도착 상태</th><th>수신</th></tr></thead>
+          <tbody id="subwayBoard"></tbody></table>
+      </div>
+    </div>
+  </section>
+
   <div class="grid">
     <div class="panel full">
       <h2>혼잡 순위</h2>
@@ -364,6 +412,8 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
 <script>
 const LVL={"여유":"#0ca30c","보통":"#fab219","약간 붐빔":"#ec835a","붐빔":"#d03b3b"};
 const fmt=n=>Math.round(n).toLocaleString();
+const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const shortTime=value=>value?value.split(' ').pop():'—';
 let charts={};
 
 function loadData(manual){
@@ -430,6 +480,53 @@ function render(D){
     const pos=c.corr>=0,bg=pos?'#12294a':'#3a1520',fg=pos?'#8ab4f8':'#e98aa0';
     return `<span class="chip" style="background:${bg};color:${fg}">${NAMES[c.metric]||c.metric} <b>${pos?'+':''}${c.corr.toFixed(2)}</b></span>`;
   }).join('');
+
+  renderSubway(D.subway);
+}
+
+function renderSubway(S){
+  const root=document.getElementById('subwayRoot');
+  if(!S||!Array.isArray(S.board)){root.hidden=true;return;}
+  root.hidden=false;
+  document.getElementById('subwaySub').textContent=
+    `API 수신 ${S.updated_at||'—'} · ${S.station_count}/${S.requested_station_count}개 역 수집`;
+  const src=S.source||{};
+  document.getElementById('subwaySource').innerHTML=src.url
+    ? `<a href="${esc(src.url)}" target="_blank" rel="noopener">${esc(src.portal)} · ${esc(src.dataset)} ↗</a>`
+    : '';
+  const subwayKpis=[
+    ['표본역',S.station_count+'곳'],
+    ['포착 노선',S.line_count+'개'],
+    ['도착 예보',S.arrival_count+'건'],
+    ['진입·도착 임박',S.near_count+'건']
+  ];
+  document.getElementById('subwayKpis').innerHTML=subwayKpis.map(k=>
+    `<div class="kpi"><div class="label">${k[0]}</div><div class="value">${k[1]}</div></div>`).join('');
+
+  const L=S.lines||[];
+  document.getElementById('subwayChartBox').style.height=Math.max(230,L.length*34+55)+'px';
+  charts.subway=new Chart(document.getElementById('subwayChart'),{
+    type:'bar',data:{labels:L.map(x=>x.line),datasets:[{data:L.map(x=>x.train_count),
+      backgroundColor:L.map(x=>x.color),borderRadius:4,barThickness:19}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'개 열차'}}},
+      scales:{x:{beginAtZero:true,ticks:{color:'#8892b0',precision:0},grid:{color:'#1e2547'}},
+        y:{ticks:{color:'#b4c2f5'},grid:{display:false}}}}
+  });
+
+  document.getElementById('subwayCoverage').innerHTML=
+    `<p><b style="color:#dce7f9">${esc(src.coverage||'')}</b></p>`+
+    `<p style="margin-top:8px">수집역: ${S.stations.map(esc).join(' · ')}</p>`+
+    `<p style="margin-top:8px">도착정보는 원천 수집·가공 시차가 있을 수 있어 <code>recptnDt</code> 수신시각을 함께 표시합니다.</p>`;
+
+  document.getElementById('subwayBoard').innerHTML=S.board.map(row=>
+    `<tr class="arrival ${row.near?'near':''}">`+
+      `<td><b>${esc(row.station)}</b></td>`+
+      `<td><span class="line-pill" style="background:${esc(row.color)}">${esc(row.line)}</span></td>`+
+      `<td>${esc(row.direction)}<div class="muted">${esc(row.destination)}</div></td>`+
+      `<td class="arrival-message">${esc(row.message)}${row.train_type&&row.train_type!=='일반'?` <span class="muted">${esc(row.train_type)}</span>`:''}</td>`+
+      `<td class="muted">${esc(shortTime(row.received_at))}</td></tr>`
+  ).join('');
 }
 
 loadData(false);

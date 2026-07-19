@@ -1,6 +1,6 @@
 # Seoul Real-time City Data Analytics · 서울 실시간 도시데이터 분석
 
-> 서울시 120개 핫스팟의 실시간 인구·혼잡·날씨·교통·상권 데이터를 수집·파싱·분석하는 파이프라인
+> 서울 핫스팟 도시데이터와 주요 지하철역 실시간 도착정보를 수집·파싱·분석하는 파이프라인
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![Data](https://img.shields.io/badge/data-Seoul%20Open%20Data-1E88E5?style=flat-square)](https://data.seoul.go.kr)
@@ -25,6 +25,7 @@ This repo collects, flattens, and analyzes it.
 - **분석** (`analysis.py`): 혼잡 순위, 카테고리 요약, 인구통계 프로파일,
   성비, **혼잡–날씨/대기질 상관**, 스냅샷 요약통계
 - **12단계 인구 예보** 파싱 (`parse_forecast`)
+- **지하철 실시간 도착** (`subway.py`): 8개 주요역의 노선·방향·행선·도착 메시지·수신시각 수집
 
 ## 데이터 소스 · Data Source
 
@@ -34,11 +35,21 @@ This repo collects, flattens, and analyzes it.
 http://openapi.seoul.go.kr:8088/{KEY}/json/citydata/1/5/{지역명}
 ```
 
+서울 열린데이터광장 「서울시 지하철 실시간 도착정보」 (`realtimeStationArrival`)
+
+```
+http://swopenAPI.seoul.go.kr/api/subway/{KEY}/json/realtimeStationArrival/0/6/{역명}
+```
+
+지하철은 강남·잠실·홍대입구·서울·고속터미널·여의도·건대입구·명동 8개 표본역을 수집한다.
+전체 서울 지하철 운행 상태로 해석하지 않으며, API의 `recptnDt`를 화면에 표시한다.
+
 ### API 키 설정
 
 ```bash
 # data.seoul.go.kr 에서 발급받은 인증키를 환경변수로 설정
 export SEOUL_API_KEY="발급받은_인증키"      # Windows(PowerShell): $env:SEOUL_API_KEY="..."
+export SEOUL_SUBWAY_API_KEY="발급받은_지하철_인증키"
 ```
 
 - 키 **미설정 시** `sample` 키로 동작 → 지역과 무관하게 **동일한 고정 샘플**을 반환한다
@@ -49,12 +60,12 @@ export SEOUL_API_KEY="발급받은_인증키"      # Windows(PowerShell): $env:S
 `.github/workflows/refresh.yml`이 매시간 45개 대표 지역을 새로
 수집해 `docs/data.json`과 `docs/index.html`을 갱신한다. 대시보드는 5분마다 최신 배포본을
 자동 확인한다. API 키는 브라우저나 HTML에 넣지 않고 GitHub Actions 시크릿
-`SEOUL_API_KEY`로만 관리한다.
+`SEOUL_API_KEY`·`SEOUL_SUBWAY_API_KEY`로만 관리한다.
 
-수집 성공 지역이 40개 미만이거나 키가 없으면 작업은 실패하고 기존의 마지막
+도시 수집 성공 지역이 40개 미만, 지하철 성공역이 6개 미만이거나 키가 없으면 작업은 실패하고 기존의 마지막
 정상 대시보드를 보존한다.
 
-1. 저장소 `Settings → Secrets and variables → Actions`에 `SEOUL_API_KEY` 등록
+1. 저장소 `Settings → Secrets and variables → Actions`에 `SEOUL_API_KEY`·`SEOUL_SUBWAY_API_KEY` 등록
 2. `Actions → 서울 실시간 도시데이터 대시보드 갱신 → Run workflow`로 수동 실행
 
 ## 빠른 시작 · Quick Start
@@ -113,14 +124,17 @@ ds-research-urban-analytics/
 │   ├── api.py          # API 클라이언트 (병렬 수집)
 │   ├── parser.py       # 중첩 JSON → 평탄 레코드/DataFrame
 │   ├── analysis.py     # 순위·요약·상관·프로파일
+│   ├── subway.py       # 주요역 지하철 실시간 도착정보
 │   ├── viz.py          # 스냅샷 → HTML 대시보드 생성
 │   └── areas.py        # 120개 지역 큐레이션 목록 + 혼잡도 상수
 ├── scripts/
 │   ├── snapshot.py     # 스냅샷 수집 CLI (CSV)
+│   ├── build_docs.py   # 도시+지하철 API 운영 대시보드 빌드
 │   └── dashboard.py    # HTML 대시보드 생성 CLI
 ├── tests/              # fixture 기반 단위 테스트 (네트워크 불필요)
 │   ├── fixtures/sample_citydata.json
 │   ├── test_seoul_citydata.py
+│   ├── test_subway.py
 │   └── test_viz.py
 ├── requirements.txt
 └── README.md
@@ -135,11 +149,12 @@ ds-research-urban-analytics/
 | 날씨·대기질 | 기온·습도·강수, PM10·PM2.5, 통합대기지수, 자외선 |
 | 교통 | 도로 소통(원활·서행·정체), 평균 속도 |
 | 상권 | 상권 혼잡, 결제 건수 |
+| 지하철 | 표본역·노선·방향·행선·도착 메시지·API 수신시각 |
 
 ## 테스트 · Tests
 
 ```bash
-pytest -q            # 29개 테스트 (fixture 기반, 네트워크 불필요)
+pytest -q            # fixture 기반, 네트워크 불필요
 ```
 
 ## 라이선스 · License
