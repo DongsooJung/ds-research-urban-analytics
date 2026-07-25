@@ -108,7 +108,7 @@ class TestFetch:
         with pytest.raises(MobilityAPIError, match="서비스 없음"):
             fetch_paged_rows("bad", "missing", api_key="K")
 
-    def test_real_key_paginates_until_total(self, monkeypatch):
+    def test_real_key_paginates_full_page_when_total_count_is_page_size(self, monkeypatch):
         called_urls = []
 
         def fake_request(url, *_args):
@@ -119,7 +119,7 @@ class TestFetch:
                 rows.append({"stationId": "ST-2"})
             return {
                 "rentBikeStatus": {
-                    "list_total_count": 3,
+                    "list_total_count": len(rows),
                     "RESULT": {"CODE": "INFO-000"},
                     "row": rows,
                 }

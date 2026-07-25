@@ -104,11 +104,10 @@ def fetch_paged_rows(
             raise MobilityAPIError(f"{service}: row 목록이 아닙니다")
         rows.extend(row for row in page_rows if isinstance(row, dict))
 
-        try:
-            total = int(container.get("list_total_count") or len(rows))
-        except (TypeError, ValueError):
-            total = len(rows)
-        if key == "sample" or end >= total or not page_rows:
+        # 일부 실시간 API는 list_total_count에 전체 건수가 아니라 현재 페이지
+        # 건수를 반환한다. 꽉 찬 페이지라면 다음 페이지를 확인하고, 짧은
+        # 페이지 또는 빈 페이지에서 종료해야 서울 전역 데이터를 놓치지 않는다.
+        if key == "sample" or not page_rows or len(page_rows) < effective_page_size:
             break
         start = end + 1
 
