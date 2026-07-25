@@ -37,6 +37,13 @@ from .subway import (
     fetch_station_arrivals,
     get_subway_api_key,
 )
+from .mobility import (
+    MobilityAPIError,
+    build_mobility_dashboard_data,
+    build_page_url,
+    fetch_bike_status,
+    fetch_parking_status,
+)
 
 __all__ = [
     "fetch_citydata", "fetch_many", "get_api_key", "SeoulAPIError",
@@ -49,4 +56,6 @@ __all__ = [
     "MONITORED_STATIONS", "SubwayAPIError", "build_arrival_url",
     "build_subway_dashboard_data", "fetch_many_station_arrivals",
     "fetch_station_arrivals", "get_subway_api_key",
+    "MobilityAPIError", "build_mobility_dashboard_data", "build_page_url",
+    "fetch_bike_status", "fetch_parking_status",
 ]

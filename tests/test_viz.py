@@ -97,6 +97,10 @@ class TestPagesDashboard:
         assert "갱신 지연 · 마지막 정상 데이터" in html
         assert "주요역 실시간 도착정보" in html
         assert "subwayBoard" in html
+        assert "시민 이동·생활정보" in html
+        assert "bikeBoard" in html
+        assert "parkingBoard" in html
+        assert "incidentBoard" in html
         assert "__ADMIN_URL__" not in html  # placeholder 치환됨
         assert "actions/workflows/refresh.yml" in html  # 관리자 링크
 
@@ -114,6 +118,13 @@ class TestPagesDashboard:
         _, data = write_pages_dashboard(df, str(tmp_path), subway_data=subway)
         payload = json.loads(Path(data).read_text(encoding="utf-8"))
         assert payload["subway"] == subway
+
+    def test_data_json_includes_mobility(self, df, tmp_path):
+        from seoul_citydata.viz import write_pages_dashboard
+        mobility = {"bike": {"station_count": 3}, "parking": {"live_lot_count": 2}}
+        _, data = write_pages_dashboard(df, str(tmp_path), mobility_data=mobility)
+        payload = json.loads(Path(data).read_text(encoding="utf-8"))
+        assert payload["mobility"] == mobility
 
 
 if __name__ == "__main__":
