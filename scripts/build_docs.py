@@ -24,6 +24,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import pandas as pd  # noqa: E402
 
 from seoul_citydata.areas import ALL_AREAS  # noqa: E402
+from seoul_citydata.mobility import (  # noqa: E402
+    MobilityAPIError,
+    build_mobility_dashboard_data,
+    fetch_bike_status,
+    fetch_parking_status,
+)
 from seoul_citydata.parser import to_record  # noqa: E402
 from seoul_citydata.subway import (  # noqa: E402
     MONITORED_STATIONS,
@@ -69,11 +75,13 @@ def main(argv=None) -> int:
         return 2
 
     records = []
+    city_responses = []
     ok = 0
     for i, area in enumerate(ALL_AREAS, 1):
         d = fetch(area, key)
         if d:
             records.append(to_record(d))
+            city_responses.append(d)
             ok += 1
         print(f"[{i}/{len(ALL_AREAS)}] {'OK ' if d else 'skip'} {area} (누적 {ok})", flush=True)
 
@@ -97,18 +105,42 @@ def main(argv=None) -> int:
         return 1
     subway_data = build_subway_dashboard_data(subway_responses)
 
+    print("[mobility] 서울 전역 따릉이·시영주차장 실시간 정보 수집 중...", flush=True)
+    try:
+        bike_rows = fetch_bike_status(key)
+        parking_rows = fetch_parking_status(key)
+    except MobilityAPIError as exc:
+        print(f"::error::시민 이동정보 수집 실패: {exc}. 기존 대시보드를 보존합니다.")
+        return 1
+    min_bike_stations = 500
+    min_parking_lots = 20
+    if len(bike_rows) < min_bike_stations or len(parking_rows) < min_parking_lots:
+        print(
+            f"::error::시민 이동정보 품질 검증 실패: 따릉이 {len(bike_rows)}개 대여소 "
+            f"(최소 {min_bike_stations}), 주차장 {len(parking_rows)}곳 "
+            f"(최소 {min_parking_lots}). 기존 대시보드를 보존합니다."
+        )
+        return 1
+    mobility_data = build_mobility_dashboard_data(
+        bike_rows,
+        parking_rows,
+        city_responses,
+    )
+
     df = pd.DataFrame(records)
     idx, data = write_pages_dashboard(
         df,
         args.docs,
         generated_at=args.generated_at,
         subway_data=subway_data,
+        mobility_data=mobility_data,
     )
     # Jekyll 비활성화 파일 보장
     Path(args.docs, ".nojekyll").touch()
     print(
         f"[OK] 도시 {ok}/{len(ALL_AREAS)}개 지역·지하철 "
-        f"{subway_ok}/{len(MONITORED_STATIONS)}개 역 → {idx}, {data}"
+        f"{subway_ok}/{len(MONITORED_STATIONS)}개 역·따릉이 {len(bike_rows)}개 대여소·"
+        f"시영주차장 {len(parking_rows)}곳 → {idx}, {data}"
     )
     return 0
 

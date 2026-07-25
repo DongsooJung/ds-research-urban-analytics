@@ -1,6 +1,6 @@
 # Seoul Real-time City Data Analytics · 서울 실시간 도시데이터 분석
 
-> 서울 핫스팟 도시데이터와 주요 지하철역 실시간 도착정보를 수집·파싱·분석하는 파이프라인
+> 서울 핫스팟·지하철·따릉이·시영주차장·교통통제 정보를 시민 행동 중심으로 보여주는 실시간 파이프라인
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![Data](https://img.shields.io/badge/data-Seoul%20Open%20Data-1E88E5?style=flat-square)](https://data.seoul.go.kr)
@@ -8,7 +8,7 @@
 
 ## 개요 · Overview
 
-서울시는 관광특구·발달상권·인구밀집지역·공원·고궁문화유산 등 **120개 주요 장소**의
+서울시는 관광특구·발달상권·인구밀집지역·공원·고궁문화유산 등 **121개 주요 장소**의
 실시간 도시데이터(인구 혼잡도, 12단계 인구 예보, 날씨·대기질, 도로 소통, 상권 결제)를
 공개 API로 제공한다. 본 저장소는 이 데이터를 수집→평탄화→분석하는 재현 가능한
 파이프라인을 제공한다.
@@ -26,6 +26,8 @@ This repo collects, flattens, and analyzes it.
   성비, **혼잡–날씨/대기질 상관**, 스냅샷 요약통계
 - **12단계 인구 예보** 파싱 (`parse_forecast`)
 - **지하철 실시간 도착** (`subway.py`): 8개 주요역의 노선·방향·행선·도착 메시지·수신시각 수집
+- **시민 이동정보** (`mobility.py`): 서울 전역 따릉이 대여 가능 수, 실시간 연계 시영주차장
+  여유면·요금, 주요 핫스팟 사고·통제 정보를 수집·중복 제거
 
 ## 데이터 소스 · Data Source
 
@@ -43,6 +45,22 @@ http://swopenAPI.seoul.go.kr/api/subway/{KEY}/json/realtimeStationArrival/0/6/{�
 
 지하철은 강남·잠실·홍대입구·서울·고속터미널·여의도·건대입구·명동 8개 표본역을 수집한다.
 전체 서울 지하철 운행 상태로 해석하지 않으며, API의 `recptnDt`를 화면에 표시한다.
+
+서울 열린데이터광장 「서울시 공공자전거 따릉이 실시간 대여정보」 (`bikeList`)
+
+```
+http://openapi.seoul.go.kr:8088/{KEY}/json/bikeList/1/1000/
+```
+
+서울 열린데이터광장 「서울시 시영주차장 실시간 주차대수 정보」 (`GetParkingInfo`)
+
+```
+http://openapi.seoul.go.kr:8088/{KEY}/json/GetParkingInfo/1/1000/
+```
+
+따릉이는 1회 최대 1,000건씩 페이징해 서울 전역 대여소를 수집한다. 주차 정보는
+실시간 연계 상태인 시영주차장만 집계하며, 주차장 여건에 따라 실제 정보와 5분 이상 차이가 날 수 있다.
+사고·통제는 `citydata.ACDNT_CNTRL_STTS`를 45개 대표 핫스팟에서 수집해 중복 제거한다.
 
 ### API 키 설정
 
@@ -62,8 +80,8 @@ export SEOUL_SUBWAY_API_KEY="발급받은_지하철_인증키"
 자동 확인한다. API 키는 브라우저나 HTML에 넣지 않고 GitHub Actions 시크릿
 `SEOUL_API_KEY`·`SEOUL_SUBWAY_API_KEY`로만 관리한다.
 
-도시 수집 성공 지역이 40개 미만, 지하철 성공역이 6개 미만이거나 키가 없으면 작업은 실패하고 기존의 마지막
-정상 대시보드를 보존한다.
+도시 수집 성공 지역이 40개 미만, 지하철 성공역이 6개 미만, 따릉이 대여소가 500개 미만,
+시영주차장이 20곳 미만이거나 키가 없으면 작업은 실패하고 기존의 마지막 정상 대시보드를 보존한다.
 
 1. 저장소 `Settings → Secrets and variables → Actions`에 `SEOUL_API_KEY`·`SEOUL_SUBWAY_API_KEY` 등록
 2. `Actions → 서울 실시간 도시데이터 대시보드 갱신 → Run workflow`로 수동 실행
@@ -97,8 +115,8 @@ print(weather_congestion_corr(df))       # 혼잡 vs 날씨/대기질 상관
 
 ### 시각화 · Dashboard
 
-`viz.py`가 스냅샷 DataFrame → 자기완결형 HTML 대시보드(혼잡 순위·카테고리·연령분포·
-혼잡-환경 상관, Chart.js)를 생성한다.
+`viz.py`가 스냅샷 DataFrame → 자기완결형 HTML 대시보드(혼잡 순위·연령분포·혼잡-환경 상관,
+지하철 전광판, 따릉이·주차장·사고통제, Chart.js)를 생성한다.
 
 ```bash
 # 라이브 수집 → 대시보드
@@ -125,6 +143,7 @@ ds-research-urban-analytics/
 │   ├── parser.py       # 중첩 JSON → 평탄 레코드/DataFrame
 │   ├── analysis.py     # 순위·요약·상관·프로파일
 │   ├── subway.py       # 주요역 지하철 실시간 도착정보
+│   ├── mobility.py     # 따릉이·주차장·사고통제 수집 및 시민용 집계
 │   ├── viz.py          # 스냅샷 → HTML 대시보드 생성
 │   └── areas.py        # 120개 지역 큐레이션 목록 + 혼잡도 상수
 ├── scripts/
@@ -135,6 +154,7 @@ ds-research-urban-analytics/
 │   ├── fixtures/sample_citydata.json
 │   ├── test_seoul_citydata.py
 │   ├── test_subway.py
+│   ├── test_mobility.py
 │   └── test_viz.py
 ├── requirements.txt
 └── README.md
@@ -150,6 +170,9 @@ ds-research-urban-analytics/
 | 교통 | 도로 소통(원활·서행·정체), 평균 속도 |
 | 상권 | 상권 혼잡, 결제 건수 |
 | 지하철 | 표본역·노선·방향·행선·도착 메시지·API 수신시각 |
+| 따릉이 | 전역 대여 가능 수, 빈/부족 대여소, 대여 가능 상위 대여소 |
+| 주차 | 실시간 연계 주차장 여유면, 기본요금, 갱신시각, 자치구별 집계 |
+| 생활안전 | 대표 핫스팟 사고·공사·집회 통제, 영향 지역, 종료 예정시각 |
 
 ## 테스트 · Tests
 

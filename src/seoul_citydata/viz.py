@@ -89,6 +89,7 @@ def write_pages_dashboard(
     docs_dir: str = "docs",
     generated_at: str = "",
     subway_data: dict[str, Any] | None = None,
+    mobility_data: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     """GitHub Pages용 셸+데이터 분리 배포 파일 생성.
 
@@ -106,6 +107,8 @@ def write_pages_dashboard(
         data["generated_at"] = generated_at
     if subway_data is not None:
         data["subway"] = subway_data
+    if mobility_data is not None:
+        data["mobility"] = mobility_data
 
     data_path = os.path.join(docs_dir, "data.json")
     with open(data_path, "w", encoding="utf-8") as f:
@@ -291,9 +294,9 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>서울 실시간 도시데이터 대시보드</title>
-<meta name="description" content="서울 실시간 도시·지하철 대시보드 — 혼잡·인구·날씨·주요역 도착정보 자동 갱신">
+<meta name="description" content="서울 실시간 시민 대시보드 — 혼잡·날씨·지하철·따릉이·주차장·교통통제 자동 갱신">
 <meta property="og:title" content="서울 실시간 도시데이터 대시보드">
-<meta property="og:description" content="서울시 핫스팟 인구·혼잡·날씨와 주요 지하철역 실시간 도착정보">
+<meta property="og:description" content="서울시 혼잡·날씨·지하철·따릉이·주차장·교통통제를 한눈에">
 <meta property="og:type" content="website">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -341,6 +344,15 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
   .arrival.near td{background:rgba(78,204,163,.045)}
   .arrival-message{font-weight:650;color:#dce7f9;white-space:nowrap}
   .muted{color:#8892b0;font-size:12px}
+  .positive{color:#4ecca3;font-weight:700}
+  .warning{color:#f2b84b;font-weight:700}
+  .danger{color:#ff7189;font-weight:700}
+  .watch-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+  .watch-item{display:inline-flex;gap:5px;align-items:center;border:1px solid #3a2f45;
+    background:#21182b;border-radius:999px;padding:5px 9px;color:#e6b8c5;font-size:11px}
+  .source-list{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+  .footnote{font-size:11px;color:#8892b0;margin:-4px 0 20px}
+  .incident-info{min-width:280px;white-space:normal}
   .corr-pos{color:#4ecca3}.corr-neg{color:#e94560}
   .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 12px;border-radius:8px}
   #err{color:#e94560;font-size:13px;margin:8px 0}
@@ -362,6 +374,45 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
   <div id="err"></div>
 
   <div class="kpis" id="kpis"></div>
+
+  <section id="mobilityRoot" hidden>
+    <div class="section-head">
+      <div>
+        <h2>🚲 시민 이동·생활정보</h2>
+        <div class="sub" id="mobilitySub"></div>
+      </div>
+      <div class="source-list" id="mobilitySources"></div>
+    </div>
+    <div class="kpis" id="mobilityKpis"></div>
+    <div class="grid">
+      <div class="panel">
+        <h2>따릉이 바로 빌리기</h2>
+        <div class="cap">서울 전역에서 대여 가능 자전거가 많은 대여소</div>
+        <div class="table-wrap">
+          <table><thead><tr><th>대여소</th><th>대여 가능</th><th>거치율</th></tr></thead>
+            <tbody id="bikeBoard"></tbody></table>
+        </div>
+        <div class="watch-list" id="bikeWarnings"></div>
+      </div>
+      <div class="panel">
+        <h2>시영주차장 여유 공간</h2>
+        <div class="cap">실시간 연계 주차장 중 현재 여유면이 많은 곳</div>
+        <div class="table-wrap">
+          <table><thead><tr><th>주차장</th><th>여유</th><th>기본요금</th><th>갱신</th></tr></thead>
+            <tbody id="parkingBoard"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:18px">
+      <h2>도로 사고·통제</h2>
+      <div class="cap">수집 중인 주요 핫스팟 주변의 현재 사고·공사·집회 통제</div>
+      <div class="table-wrap">
+        <table><thead><tr><th>유형</th><th>내용</th><th>영향 지역</th><th>종료 예정</th></tr></thead>
+          <tbody id="incidentBoard"></tbody></table>
+      </div>
+    </div>
+    <div class="footnote" id="mobilityNote"></div>
+  </section>
 
   <section id="subwayRoot" hidden>
     <div class="section-head">
@@ -481,7 +532,67 @@ function render(D){
     return `<span class="chip" style="background:${bg};color:${fg}">${NAMES[c.metric]||c.metric} <b>${pos?'+':''}${c.corr.toFixed(2)}</b></span>`;
   }).join('');
 
+  renderMobility(D.mobility);
   renderSubway(D.subway);
+}
+
+function renderMobility(M){
+  const root=document.getElementById('mobilityRoot');
+  if(!M||!M.bike||!M.parking){root.hidden=true;return;}
+  root.hidden=false;
+  const B=M.bike,P=M.parking,I=M.incidents||{},sources=M.sources||{};
+  document.getElementById('mobilitySub').textContent=
+    `수집 ${M.collected_at||'—'} · 주차 정보 ${P.updated_at||'—'}`;
+  document.getElementById('mobilitySources').innerHTML=['bike','parking','incidents']
+    .map(key=>sources[key]&&sources[key].url
+      ? `<a class="source" href="${esc(sources[key].url)}" target="_blank" rel="noopener">${esc(sources[key].dataset)} ↗</a>`
+      : '').join('');
+
+  const mobilityKpis=[
+    ['대여 가능 따릉이',fmt(B.available_bikes)+'대'],
+    ['빈 따릉이 대여소',fmt(B.empty_station_count)+'곳'],
+    ['시영주차장 여유면',fmt(P.available_spaces)+'면'],
+    ['사고·통제',fmt(I.incident_count||0)+'건']
+  ];
+  document.getElementById('mobilityKpis').innerHTML=mobilityKpis.map(k=>
+    `<div class="kpi"><div class="label">${k[0]}</div><div class="value">${k[1]}</div></div>`).join('');
+
+  document.getElementById('bikeBoard').innerHTML=(B.top_available||[]).map(row=>{
+    const mapUrl=row.latitude!=null&&row.longitude!=null
+      ? `https://map.kakao.com/link/map/${encodeURIComponent(row.name)},${row.latitude},${row.longitude}`
+      : '';
+    const name=mapUrl
+      ? `<a href="${esc(mapUrl)}" target="_blank" rel="noopener">${esc(row.name)} ↗</a>`
+      : esc(row.name);
+    return `<tr><td>${name}</td><td class="positive">${fmt(row.bikes)}대</td>`+
+      `<td>${row.ratio==null?'—':esc(row.ratio)+'%'}</td></tr>`;
+  }).join('');
+  const lows=B.low_availability||[];
+  document.getElementById('bikeWarnings').innerHTML=lows.length
+    ? `<span class="muted">대여 주의</span>`+lows.map(row=>
+        `<span class="watch-item">${esc(row.name)} · ${fmt(row.bikes)}대</span>`).join('')
+    : '<span class="muted">대여 가능 2대 이하 대여소가 없습니다.</span>';
+
+  document.getElementById('parkingBoard').innerHTML=(P.top_available||[]).map(row=>
+    `<tr><td><b>${esc(row.name)}</b><div class="muted">${esc(row.address)}</div></td>`+
+      `<td class="${row.available>0?'positive':'danger'}">${fmt(row.available)}면`+
+        `<div class="muted">총 ${fmt(row.capacity)}면</div></td>`+
+      `<td>${esc(row.fee)}</td><td class="muted">${esc(shortTime(row.updated_at))}</td></tr>`
+  ).join('');
+
+  const incidents=I.items||[];
+  document.getElementById('incidentBoard').innerHTML=incidents.length
+    ? incidents.map(row=>
+        `<tr><td><b class="warning">${esc(row.type)}</b><div class="muted">${esc(row.detail)}</div></td>`+
+        `<td class="incident-info">${esc(row.info)}</td>`+
+        `<td>${esc((row.areas||[]).join(' · '))}</td>`+
+        `<td class="muted">${esc(row.expected_clear_at||'확인 필요')}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted">현재 수집 범위에서 확인된 사고·통제가 없습니다.</td></tr>';
+
+  const parkingNote=sources.parking&&sources.parking.freshness_note
+    ? sources.parking.freshness_note : '';
+  document.getElementById('mobilityNote').textContent=
+    `${parkingNote} 따릉이는 API 수집시각 기준이며, 사고·통제는 ${sources.incidents?.coverage||'주요 핫스팟'} 범위입니다.`;
 }
 
 function renderSubway(S){
