@@ -31,6 +31,12 @@ from seoul_citydata.mobility import (  # noqa: E402
     fetch_parking_status,
 )
 from seoul_citydata.parser import to_record  # noqa: E402
+from seoul_citydata.population import (  # noqa: E402
+    PopulationAPIError,
+    build_population_dashboard_data,
+    fetch_admin_dong_mapping,
+    fetch_population_rows,
+)
 from seoul_citydata.subway import (  # noqa: E402
     MONITORED_STATIONS,
     build_subway_dashboard_data,
@@ -127,6 +133,31 @@ def main(argv=None) -> int:
         city_responses,
     )
 
+    print("[population] 서울 전역 행정동 생활인구 수집 중...", flush=True)
+    try:
+        population_rows, population_meta = fetch_population_rows(key)
+        try:
+            admin_dong_mapping = fetch_admin_dong_mapping()
+        except PopulationAPIError as exc:
+            print(f"::warning::행정동명 매핑 실패, 코드로 표시합니다: {exc}")
+            admin_dong_mapping = {}
+    except PopulationAPIError as exc:
+        print(f"::error::생활인구 수집 실패: {exc}. 기존 대시보드를 보존합니다.")
+        return 1
+    min_population_dongs = 400
+    if len(population_rows) < min_population_dongs:
+        print(
+            f"::error::생활인구 품질 검증 실패: 행정동 {len(population_rows)}개 "
+            f"(최소 {min_population_dongs}개 필요). 기존 대시보드를 보존합니다."
+        )
+        return 1
+    population_data = build_population_dashboard_data(
+        population_rows,
+        admin_dong_mapping,
+        reference_date=population_meta["reference_date"],
+        reference_hour=population_meta["reference_hour"],
+    )
+
     df = pd.DataFrame(records)
     idx, data = write_pages_dashboard(
         df,
@@ -134,13 +165,15 @@ def main(argv=None) -> int:
         generated_at=args.generated_at,
         subway_data=subway_data,
         mobility_data=mobility_data,
+        population_data=population_data,
     )
     # Jekyll 비활성화 파일 보장
     Path(args.docs, ".nojekyll").touch()
     print(
         f"[OK] 도시 {ok}/{len(ALL_AREAS)}개 지역·지하철 "
         f"{subway_ok}/{len(MONITORED_STATIONS)}개 역·따릉이 {len(bike_rows)}개 대여소·"
-        f"시영주차장 {len(parking_rows)}곳 → {idx}, {data}"
+        f"시영주차장 {len(parking_rows)}곳·생활인구 {len(population_rows)}개 행정동 "
+        f"→ {idx}, {data}"
     )
     return 0
 

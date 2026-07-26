@@ -58,6 +58,19 @@ class TestBuildData:
         s = json.dumps(d, ensure_ascii=False)
         assert "NaN" not in s
 
+    def test_population_insights(self, df):
+        df["resident_rate"] = [30, 40, 50]
+        df["non_resident_rate"] = [70, 60, 50]
+        df["forecast"] = [
+            [{"fcst_time": "2026-07-26 10:00", "fcst_ppltn_min": 100000,
+              "fcst_ppltn_max": 110000, "fcst_congest_level": "붐빔"}],
+            [], [],
+        ]
+        insights = build_dashboard_data(df)["population_insights"]
+        assert insights["non_resident_rate"] > insights["resident_rate"]
+        assert insights["forecasts"][0]["area"] == "A"
+        assert insights["forecasts"][0]["delta_rate"] > 0
+
 
 class TestGenerate:
     def test_creates_html(self, df, tmp_path):
@@ -101,6 +114,9 @@ class TestPagesDashboard:
         assert "bikeBoard" in html
         assert "parkingBoard" in html
         assert "incidentBoard" in html
+        assert "서울 전역 생활인구" in html
+        assert "populationDongBoard" in html
+        assert "populationForecastBoard" in html
         assert "__ADMIN_URL__" not in html  # placeholder 치환됨
         assert "actions/workflows/refresh.yml" in html  # 관리자 링크
 
@@ -125,6 +141,13 @@ class TestPagesDashboard:
         _, data = write_pages_dashboard(df, str(tmp_path), mobility_data=mobility)
         payload = json.loads(Path(data).read_text(encoding="utf-8"))
         assert payload["mobility"] == mobility
+
+    def test_data_json_includes_population(self, df, tmp_path):
+        from seoul_citydata.viz import write_pages_dashboard
+        population = {"dong_count": 424, "top_dongs": []}
+        _, data = write_pages_dashboard(df, str(tmp_path), population_data=population)
+        payload = json.loads(Path(data).read_text(encoding="utf-8"))
+        assert payload["population"] == population
 
 
 if __name__ == "__main__":
