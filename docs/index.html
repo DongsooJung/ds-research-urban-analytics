@@ -67,6 +67,9 @@
   .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 12px;border-radius:8px}
   .freshness{display:inline-flex;align-items:center;border:1px solid #61522b;background:#28230f;
     color:#f2c96d;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700}
+  .subsection-head{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap;
+    margin:28px 0 14px;padding-top:20px;border-top:1px dashed #2a3354}
+  .subsection-head h3{font-size:17px;color:#dce7f9}
   #err{color:#e94560;font-size:13px;margin:8px 0}
   @media(max-width:768px){.grid{grid-template-columns:1fr}}
 </style>
@@ -128,6 +131,40 @@
             <tbody id="populationForecastBoard"></tbody></table>
         </div>
       </div>
+    </div>
+    <div id="movementRoot" hidden>
+      <div class="subsection-head">
+        <div>
+          <h3>서울 밖에서 유입된 생활인구</h3>
+          <div class="sub" id="movementSub"></div>
+        </div>
+        <span id="movementSource"></span>
+      </div>
+      <div class="kpis" id="movementKpis"></div>
+      <div class="grid">
+        <div class="panel">
+          <h2>08시 외부 거주지 상위</h2>
+          <div class="cap">서울에서 생활 중인 인구의 추정 거주지 기준</div>
+          <div class="table-wrap">
+            <table><thead><tr><th>거주 지역</th><th>생활인구</th></tr></thead>
+              <tbody id="movementOriginBoard"></tbody></table>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>08시 유입 집중 행정동</h2>
+          <div class="cap">서울 외 거주 생활인구가 많이 체류한 행정동</div>
+          <div class="table-wrap">
+            <table><thead><tr><th>행정동</th><th>자치구</th><th>외부 생활인구</th></tr></thead>
+              <tbody id="movementDestinationBoard"></tbody></table>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="margin-bottom:18px">
+        <h2>자치구별 오전·저녁 외부 생활인구</h2>
+        <div class="cap">08시와 18시를 비교해 출퇴근 시간대의 체류 분포를 확인합니다.</div>
+        <div class="chart-box" style="height:360px"><canvas id="movementDistrictChart" role="img" aria-label="자치구별 오전 8시와 오후 6시 외부 거주 생활인구 비교"></canvas></div>
+      </div>
+      <div class="footnote" id="movementNote"></div>
     </div>
     <div class="footnote" id="populationNote"></div>
   </section>
@@ -289,12 +326,12 @@ function render(D){
     return `<span class="chip" style="background:${bg};color:${fg}">${NAMES[c.metric]||c.metric} <b>${pos?'+':''}${c.corr.toFixed(2)}</b></span>`;
   }).join('');
 
-  renderPopulation(D.population,D.population_insights);
+  renderPopulation(D.population,D.population_insights,D.movement);
   renderMobility(D.mobility);
   renderSubway(D.subway);
 }
 
-function renderPopulation(P,insights){
+function renderPopulation(P,insights,movement){
   const root=document.getElementById('populationRoot');
   if(!P||!Array.isArray(P.top_dongs)){root.hidden=true;return;}
   root.hidden=false;
@@ -354,6 +391,59 @@ function renderPopulation(P,insights){
     : '<tr><td colspan="5" class="muted">현재 제공된 인구 예보가 없습니다.</td></tr>';
   document.getElementById('populationNote').textContent=
     `${src.freshness_note||''} 주요 장소 거주자 ${I.resident_rate??'—'}% · 비거주자 ${I.non_resident_rate??'—'}%는 실시간 도시데이터의 인구 가중 평균입니다.`;
+  renderMovement(movement);
+}
+
+function renderMovement(M){
+  const root=document.getElementById('movementRoot');
+  const morning=M&&M.periods&&M.periods['08'];
+  const evening=M&&M.periods&&M.periods['18'];
+  if(!morning||!evening){root.hidden=true;return;}
+  root.hidden=false;
+  const src=M.source||{};
+  const date=M.reference_date&&M.reference_date.length===8
+    ? `${M.reference_date.slice(0,4)}-${M.reference_date.slice(4,6)}-${M.reference_date.slice(6,8)}`
+    : (M.reference_date||'—');
+  document.getElementById('movementSub').textContent=
+    `기준 ${date} · 오전 08시와 저녁 18시 비교`;
+  document.getElementById('movementSource').innerHTML=src.url
+    ? `<a class="source" href="${esc(src.url)}" target="_blank" rel="noopener">${esc(src.dataset)} ↗</a>`
+    : '';
+  const movementKpis=[
+    ['08시 외부 거주 생활인구',fmt(morning.external_population)+'명'],
+    ['08시 외부 거주 비율',Number(morning.external_rate).toFixed(1)+'%'],
+    ['18시 외부 거주 생활인구',fmt(evening.external_population)+'명'],
+    ['18시 외부 거주 비율',Number(evening.external_rate).toFixed(1)+'%']
+  ];
+  document.getElementById('movementKpis').innerHTML=movementKpis.map(k=>
+    `<div class="kpi"><div class="label">${k[0]}</div><div class="value">${k[1]}</div></div>`).join('');
+
+  document.getElementById('movementOriginBoard').innerHTML=(morning.top_origins||[]).map(row=>
+    `<tr><td><b>${esc(row.origin)}</b></td><td class="positive">${fmt(row.population)}명</td></tr>`
+  ).join('');
+  document.getElementById('movementDestinationBoard').innerHTML=(morning.top_destinations||[]).map(row=>
+    `<tr><td><b>${esc(row.dong)}</b></td><td>${esc(row.district)}</td>`+
+    `<td class="positive">${fmt(row.population)}명</td></tr>`
+  ).join('');
+
+  const morningMap=Object.fromEntries((morning.by_destination_district||[]).map(x=>[x.district,x.population]));
+  const eveningMap=Object.fromEntries((evening.by_destination_district||[]).map(x=>[x.district,x.population]));
+  const districts=[...new Set([...Object.keys(morningMap),...Object.keys(eveningMap)])]
+    .sort((a,b)=>(morningMap[b]||0)+(eveningMap[b]||0)-(morningMap[a]||0)-(eveningMap[a]||0))
+    .slice(0,12);
+  charts.movementDistrict=new Chart(document.getElementById('movementDistrictChart'),{
+    type:'bar',
+    data:{labels:districts,datasets:[
+      {label:'08시',data:districts.map(x=>morningMap[x]||0),backgroundColor:'#4ecca3',borderRadius:3},
+      {label:'18시',data:districts.map(x=>eveningMap[x]||0),backgroundColor:'#8a6fe8',borderRadius:3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#b4c2f5'}},tooltip:{callbacks:{label:c=>c.dataset.label+' '+fmt(c.raw)+'명'}}},
+      scales:{x:{ticks:{color:'#b4c2f5'},grid:{display:false}},
+        y:{ticks:{color:'#8892b0',callback:v=>fmt(v)},grid:{color:'#1e2547'}}}}
+  });
+  document.getElementById('movementNote').textContent=
+    `${src.freshness_note||''} 기준일 원본 생성일 ${M.generated_on||'—'}.`;
 }
 
 function renderMobility(M){
