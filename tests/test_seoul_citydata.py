@@ -126,6 +126,7 @@ class TestToRecord:
         assert rec["category"] == "고궁·문화유산"
         assert rec["congest_score"] == 1
         assert rec["ppltn_mid"] == 31000.0
+        assert len(rec["forecast"]) == 12
 
     def test_record_from_citydata_dict(self, citydata):
         rec = to_record(citydata)

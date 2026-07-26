@@ -1,6 +1,6 @@
 # Seoul Real-time City Data Analytics · 서울 실시간 도시데이터 분석
 
-> 서울 핫스팟·지하철·따릉이·시영주차장·교통통제 정보를 시민 행동 중심으로 보여주는 실시간 파이프라인
+> 서울 핫스팟·전역 생활인구·지하철·따릉이·시영주차장·교통통제 정보를 시민 행동 중심으로 보여주는 데이터 파이프라인
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![Data](https://img.shields.io/badge/data-Seoul%20Open%20Data-1E88E5?style=flat-square)](https://data.seoul.go.kr)
@@ -25,6 +25,8 @@ This repo collects, flattens, and analyzes it.
 - **분석** (`analysis.py`): 혼잡 순위, 카테고리 요약, 인구통계 프로파일,
   성비, **혼잡–날씨/대기질 상관**, 스냅샷 요약통계
 - **12단계 인구 예보** 파싱 (`parse_forecast`)
+- **서울 전역 생활인구** (`population.py`): 최근 제공일의 행정동별 시간대·성별·연령별
+  생활인구와 공식 행정동 코드 매핑을 수집·집계
 - **지하철 실시간 도착** (`subway.py`): 8개 주요역의 노선·방향·행선·도착 메시지·수신시각 수집
 - **시민 이동정보** (`mobility.py`): 서울 전역 따릉이 대여 가능 수, 실시간 연계 시영주차장
   여유면·요금, 주요 핫스팟 사고·통제 정보를 수집·중복 제거
@@ -44,6 +46,14 @@ http://swopenAPI.seoul.go.kr/api/subway/{KEY}/json/realtimeStationArrival/0/6/{�
 ```
 
 지하철은 강남·잠실·홍대입구·서울·고속터미널·여의도·건대입구·명동 8개 표본역을 수집한다.
+
+서울 열린데이터광장 「행정동 단위 서울 생활인구(내국인)」 (`SPOP_LOCAL_RESD_DONG`)
+
+```
+http://openapi.seoul.go.kr:8088/{KEY}/json/SPOP_LOCAL_RESD_DONG/1/1000/{기준일}/{시간대}
+```
+
+생활인구는 실시간 값이 아니며 서울시 제공 일정에 따라 통상 D-4 기준으로 갱신된다.
 전체 서울 지하철 운행 상태로 해석하지 않으며, API의 `recptnDt`를 화면에 표시한다.
 
 서울 열린데이터광장 「서울시 공공자전거 따릉이 실시간 대여정보」 (`bikeList`)
@@ -144,6 +154,7 @@ ds-research-urban-analytics/
 │   ├── analysis.py     # 순위·요약·상관·프로파일
 │   ├── subway.py       # 주요역 지하철 실시간 도착정보
 │   ├── mobility.py     # 따릉이·주차장·사고통제 수집 및 시민용 집계
+│   ├── population.py   # 서울 전역 행정동 생활인구 수집·집계
 │   ├── viz.py          # 스냅샷 → HTML 대시보드 생성
 │   └── areas.py        # 120개 지역 큐레이션 목록 + 혼잡도 상수
 ├── scripts/
@@ -155,6 +166,7 @@ ds-research-urban-analytics/
 │   ├── test_seoul_citydata.py
 │   ├── test_subway.py
 │   ├── test_mobility.py
+│   ├── test_population.py
 │   └── test_viz.py
 ├── requirements.txt
 └── README.md
@@ -166,6 +178,7 @@ ds-research-urban-analytics/
 |---|---|
 | 인구·혼잡 | 혼잡도(여유·보통·약간붐빔·붐빔), 인구 min/max, 12단계 예보 |
 | 인구통계 | 성비, 연령대(0~70+) 분포, 거주/비거주 비율 |
+| 전역 생활인구 | 행정동·자치구별 생활인구, 성비, 연령 구성, 기준일·시간 |
 | 날씨·대기질 | 기온·습도·강수, PM10·PM2.5, 통합대기지수, 자외선 |
 | 교통 | 도로 소통(원활·서행·정체), 평균 속도 |
 | 상권 | 상권 혼잡, 결제 건수 |

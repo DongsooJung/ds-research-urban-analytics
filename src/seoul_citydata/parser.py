@@ -127,6 +127,7 @@ def to_record(citydata_response: dict[str, Any]) -> dict[str, Any]:
     rec.update(parse_weather(cd))
     rec.update(parse_road(cd))
     rec.update(parse_commercial(cd))
+    rec["forecast"] = parse_forecast(cd)
     # 인구 중앙값(min/max 평균) 파생
     if rec.get("ppltn_min") is not None and rec.get("ppltn_max") is not None:
         rec["ppltn_mid"] = (rec["ppltn_min"] + rec["ppltn_max"]) / 2.0
