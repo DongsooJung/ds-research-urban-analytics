@@ -151,23 +151,71 @@ def parse_admin_dong_mapping(xlsx_bytes: bytes) -> dict[str, dict[str, str]]:
     return mapping
 
 
-def fetch_admin_dong_mapping(
+def parse_population_code_mappings(
+    xlsx_bytes: bytes,
+) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    """공식 코드 파일에서 행정동과 생활인구 유입지 코드를 함께 읽는다."""
+    admin_dongs = parse_admin_dong_mapping(xlsx_bytes)
+    try:
+        with zipfile.ZipFile(io.BytesIO(xlsx_bytes)) as workbook:
+            shared_root = ElementTree.fromstring(workbook.read("xl/sharedStrings.xml"))
+            shared_strings = [
+                "".join(node.text or "" for node in item.findall(".//x:t", XML_NS))
+                for item in shared_root.findall("x:si", XML_NS)
+            ]
+            sheet_root = ElementTree.fromstring(
+                workbook.read("xl/worksheets/sheet2.xml")
+            )
+    except KeyError:
+        return admin_dongs, {}
+    except Exception as exc:  # noqa: BLE001 - ZIP/XML 오류 통합
+        raise PopulationAPIError(f"유입지 코드 파일 해석 실패: {exc}") from exc
+
+    origins: dict[str, dict[str, str]] = {}
+    rows = sheet_root.findall(".//x:sheetData/x:row", XML_NS)
+    for row in rows[1:]:
+        values: dict[str, str] = {}
+        for cell in row.findall("x:c", XML_NS):
+            column = "".join(ch for ch in (cell.get("r") or "") if ch.isalpha())
+            values[column] = _xlsx_cell_value(cell, shared_strings)
+        code = values.get("A", "")
+        if code:
+            origins[code] = {
+                "province": values.get("B", "").strip(),
+                "name": values.get("C", "").strip(),
+            }
+    return admin_dongs, origins
+
+
+def fetch_population_code_mappings(
     *,
     timeout: float = 30.0,
     opener: Callable[..., Any] = urllib.request.urlopen,
-) -> dict[str, dict[str, str]]:
-    """서울 생활인구 페이지가 제공하는 공식 행정동 매핑 파일을 받는다."""
+) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    """공식 파일을 한 번 받아 행정동·유입지 코드 매핑을 모두 반환한다."""
     body = urllib.parse.urlencode(
         {"infId": "DOWNLOAD", "infSeq": "4", "seq": "7"}
     ).encode("ascii")
     request = urllib.request.Request(CODE_DOWNLOAD_URL, data=body, method="POST")
     try:
         with opener(request, timeout=timeout) as response:
-            return parse_admin_dong_mapping(response.read())
+            return parse_population_code_mappings(response.read())
     except PopulationAPIError:
         raise
     except Exception as exc:  # noqa: BLE001 - 네트워크 오류 통합
         raise PopulationAPIError(f"행정동 코드 파일 요청 실패: {exc}") from exc
+
+
+def fetch_admin_dong_mapping(
+    *,
+    timeout: float = 30.0,
+    opener: Callable[..., Any] = urllib.request.urlopen,
+) -> dict[str, dict[str, str]]:
+    """서울 생활인구 페이지가 제공하는 공식 행정동 매핑 파일을 받는다."""
+    admin_dongs, _ = fetch_population_code_mappings(
+        timeout=timeout, opener=opener
+    )
+    return admin_dongs
 
 
 def _number(value: Any) -> float:
