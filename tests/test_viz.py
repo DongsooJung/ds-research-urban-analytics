@@ -117,6 +117,9 @@ class TestPagesDashboard:
         assert "서울 전역 생활인구" in html
         assert "populationDongBoard" in html
         assert "populationForecastBoard" in html
+        assert "서울 밖에서 유입된 생활인구" in html
+        assert "movementOriginBoard" in html
+        assert "movementDestinationBoard" in html
         assert "__ADMIN_URL__" not in html  # placeholder 치환됨
         assert "actions/workflows/refresh.yml" in html  # 관리자 링크
 
@@ -148,6 +151,13 @@ class TestPagesDashboard:
         _, data = write_pages_dashboard(df, str(tmp_path), population_data=population)
         payload = json.loads(Path(data).read_text(encoding="utf-8"))
         assert payload["population"] == population
+
+    def test_data_json_includes_movement(self, df, tmp_path):
+        from seoul_citydata.viz import write_pages_dashboard
+        movement = {"reference_date": "20260721", "periods": {}}
+        _, data = write_pages_dashboard(df, str(tmp_path), movement_data=movement)
+        payload = json.loads(Path(data).read_text(encoding="utf-8"))
+        assert payload["movement"] == movement
 
 
 if __name__ == "__main__":

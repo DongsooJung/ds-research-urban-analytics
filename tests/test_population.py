@@ -13,6 +13,7 @@ from seoul_citydata.population import (  # noqa: E402
     build_population_dashboard_data,
     fetch_population_rows,
     parse_admin_dong_mapping,
+    parse_population_code_mappings,
 )
 
 
@@ -111,3 +112,31 @@ def test_parse_admin_dong_mapping_from_official_xlsx_shape():
         workbook.writestr("xl/worksheets/sheet1.xml", sheet)
     mapping = parse_admin_dong_mapping(buffer.getvalue())
     assert mapping["11110530"] == {"district": "종로구", "dong": "사직동"}
+
+
+def test_parse_population_code_mappings_includes_origins():
+    shared = """<?xml version="1.0" encoding="UTF-8"?>
+    <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+      <si><t>11110530</t></si><si><t>종로구</t></si><si><t>사직동</t></si>
+      <si><t>41131</t></si><si><t>경기</t></si><si><t>성남시 수정구</t></si>
+    </sst>"""
+    sheet1 = """<?xml version="1.0" encoding="UTF-8"?>
+    <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+      <sheetData><row r="1"/><row r="2"/>
+      <row r="3"><c r="B3" t="s"><v>0</v></c><c r="D3" t="s"><v>1</v></c><c r="E3" t="s"><v>2</v></c></row>
+      </sheetData>
+    </worksheet>"""
+    sheet2 = """<?xml version="1.0" encoding="UTF-8"?>
+    <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+      <sheetData><row r="1"/>
+      <row r="2"><c r="A2" t="s"><v>3</v></c><c r="B2" t="s"><v>4</v></c><c r="C2" t="s"><v>5</v></c></row>
+      </sheetData>
+    </worksheet>"""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as workbook:
+        workbook.writestr("xl/sharedStrings.xml", shared)
+        workbook.writestr("xl/worksheets/sheet1.xml", sheet1)
+        workbook.writestr("xl/worksheets/sheet2.xml", sheet2)
+    admin, origins = parse_population_code_mappings(buffer.getvalue())
+    assert admin["11110530"]["dong"] == "사직동"
+    assert origins["41131"] == {"province": "경기", "name": "성남시 수정구"}

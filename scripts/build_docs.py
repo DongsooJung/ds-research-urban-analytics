@@ -30,11 +30,15 @@ from seoul_citydata.mobility import (  # noqa: E402
     fetch_bike_status,
     fetch_parking_status,
 )
+from seoul_citydata.movement import (  # noqa: E402
+    MovementDataError,
+    fetch_movement_dashboard_data,
+)
 from seoul_citydata.parser import to_record  # noqa: E402
 from seoul_citydata.population import (  # noqa: E402
     PopulationAPIError,
     build_population_dashboard_data,
-    fetch_admin_dong_mapping,
+    fetch_population_code_mappings,
     fetch_population_rows,
 )
 from seoul_citydata.subway import (  # noqa: E402
@@ -69,6 +73,15 @@ def main(argv=None) -> int:
     ap.add_argument("--min-areas", type=int, default=40,
                     help="기존 대시보드를 교체할 최소 성공 지역 수")
     args = ap.parse_args(argv)
+    existing_dashboard: dict = {}
+    existing_data_path = Path(args.docs, "data.json")
+    if existing_data_path.exists():
+        try:
+            existing_dashboard = json.loads(
+                existing_data_path.read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError):
+            existing_dashboard = {}
 
     key = os.environ.get("SEOUL_API_KEY")
     if not key or key == "sample":
@@ -137,10 +150,11 @@ def main(argv=None) -> int:
     try:
         population_rows, population_meta = fetch_population_rows(key)
         try:
-            admin_dong_mapping = fetch_admin_dong_mapping()
+            admin_dong_mapping, origin_mapping = fetch_population_code_mappings()
         except PopulationAPIError as exc:
             print(f"::warning::행정동명 매핑 실패, 코드로 표시합니다: {exc}")
             admin_dong_mapping = {}
+            origin_mapping = {}
     except PopulationAPIError as exc:
         print(f"::error::생활인구 수집 실패: {exc}. 기존 대시보드를 보존합니다.")
         return 1
@@ -158,6 +172,35 @@ def main(argv=None) -> int:
         reference_hour=population_meta["reference_hour"],
     )
 
+    print("[movement] 수도권·전국 유입 생활인구 집계 중...", flush=True)
+    try:
+        if not origin_mapping:
+            raise MovementDataError("공식 유입지 코드 매핑이 없습니다.")
+        movement_data, movement_reused = fetch_movement_dashboard_data(
+            admin_dong_mapping,
+            origin_mapping,
+            existing=existing_dashboard.get("movement"),
+        )
+    except MovementDataError as exc:
+        print(f"::error::유입 생활인구 수집 실패: {exc}. 기존 대시보드를 보존합니다.")
+        return 1
+    min_movement_rows = 10000
+    movement_periods = movement_data.get("periods") or {}
+    if any(
+        (movement_periods.get(hour) or {}).get("row_count", 0) < min_movement_rows
+        for hour in ("08", "18")
+    ):
+        print(
+            "::error::유입 생활인구 품질 검증 실패: "
+            "08시 또는 18시 원본 행이 부족합니다. 기존 대시보드를 보존합니다."
+        )
+        return 1
+    print(
+        f"[movement] 기준일 {movement_data['reference_date']} "
+        f"({'기존 집계 재사용' if movement_reused else '최신 파일 신규 집계'})",
+        flush=True,
+    )
+
     df = pd.DataFrame(records)
     idx, data = write_pages_dashboard(
         df,
@@ -166,6 +209,7 @@ def main(argv=None) -> int:
         subway_data=subway_data,
         mobility_data=mobility_data,
         population_data=population_data,
+        movement_data=movement_data,
     )
     # Jekyll 비활성화 파일 보장
     Path(args.docs, ".nojekyll").touch()
@@ -173,7 +217,7 @@ def main(argv=None) -> int:
         f"[OK] 도시 {ok}/{len(ALL_AREAS)}개 지역·지하철 "
         f"{subway_ok}/{len(MONITORED_STATIONS)}개 역·따릉이 {len(bike_rows)}개 대여소·"
         f"시영주차장 {len(parking_rows)}곳·생활인구 {len(population_rows)}개 행정동 "
-        f"→ {idx}, {data}"
+        f"·유입 생활인구 {movement_data['reference_date']} 기준 → {idx}, {data}"
     )
     return 0
 
