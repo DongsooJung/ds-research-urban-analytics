@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>서울 실시간 도시데이터 대시보드</title>
-<meta name="description" content="서울 실시간 시민 대시보드 — 혼잡·날씨·지하철·따릉이·주차장·교통통제 자동 갱신">
+<meta name="description" content="서울 실시간 시민 대시보드 — 혼잡·생활인구·날씨·지하철·따릉이·주차장·교통통제 자동 갱신">
 <meta property="og:title" content="서울 실시간 도시데이터 대시보드">
-<meta property="og:description" content="서울시 혼잡·날씨·지하철·따릉이·주차장·교통통제를 한눈에">
+<meta property="og:description" content="서울시 혼잡·생활인구·날씨·지하철·따릉이·주차장·교통통제를 한눈에">
 <meta property="og:type" content="website">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -65,6 +65,8 @@
   .incident-info{min-width:280px;white-space:normal}
   .corr-pos{color:#4ecca3}.corr-neg{color:#e94560}
   .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 12px;border-radius:8px}
+  .freshness{display:inline-flex;align-items:center;border:1px solid #61522b;background:#28230f;
+    color:#f2c96d;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700}
   #err{color:#e94560;font-size:13px;margin:8px 0}
   @media(max-width:768px){.grid{grid-template-columns:1fr}}
 </style>
@@ -84,6 +86,51 @@
   <div id="err"></div>
 
   <div class="kpis" id="kpis"></div>
+
+  <section id="populationRoot" hidden>
+    <div class="section-head">
+      <div>
+        <h2>👥 서울 전역 생활인구</h2>
+        <div class="sub" id="populationSub"></div>
+      </div>
+      <div class="source-list">
+        <span class="freshness">D-4 통계</span>
+        <span id="populationSource"></span>
+      </div>
+    </div>
+    <div class="kpis" id="populationKpis"></div>
+    <div class="grid">
+      <div class="panel">
+        <h2>생활인구가 많은 행정동</h2>
+        <div class="cap">최근 제공일의 선택 시간대 기준 · 내국인 추정 생활인구</div>
+        <div class="table-wrap">
+          <table><thead><tr><th>행정동</th><th>자치구</th><th>생활인구</th><th>서울 비중</th></tr></thead>
+            <tbody id="populationDongBoard"></tbody></table>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>자치구별 생활인구</h2>
+        <div class="cap">행정동 생활인구를 자치구 단위로 합산한 상위 10곳</div>
+        <div class="chart-box" style="height:350px"><canvas id="populationDistrictChart" role="img" aria-label="자치구별 생활인구 상위 10곳"></canvas></div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="panel">
+        <h2>서울 전역 연령 구성</h2>
+        <div class="cap">최근 제공일 선택 시간대의 연령대별 생활인구 비율</div>
+        <div class="chart-box" style="height:280px"><canvas id="populationAgeChart" role="img" aria-label="서울 전역 생활인구 연령 구성"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>주요 장소 다음 인구 예보</h2>
+        <div class="cap">실시간 도시데이터의 가장 가까운 예보 시점과 현재 대비 증감</div>
+        <div class="table-wrap">
+          <table><thead><tr><th>장소</th><th>예보시각</th><th>예상인구</th><th>증감</th><th>혼잡</th></tr></thead>
+            <tbody id="populationForecastBoard"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="footnote" id="populationNote"></div>
+  </section>
 
   <section id="mobilityRoot" hidden>
     <div class="section-head">
@@ -242,8 +289,71 @@ function render(D){
     return `<span class="chip" style="background:${bg};color:${fg}">${NAMES[c.metric]||c.metric} <b>${pos?'+':''}${c.corr.toFixed(2)}</b></span>`;
   }).join('');
 
+  renderPopulation(D.population,D.population_insights);
   renderMobility(D.mobility);
   renderSubway(D.subway);
+}
+
+function renderPopulation(P,insights){
+  const root=document.getElementById('populationRoot');
+  if(!P||!Array.isArray(P.top_dongs)){root.hidden=true;return;}
+  root.hidden=false;
+  const src=P.source||{},I=insights||{};
+  const date=P.reference_date&&P.reference_date.length===8
+    ? `${P.reference_date.slice(0,4)}-${P.reference_date.slice(4,6)}-${P.reference_date.slice(6,8)}`
+    : (P.reference_date||'—');
+  document.getElementById('populationSub').textContent=
+    `기준 ${date} ${P.reference_hour||'—'}시 · ${P.dong_count}개 행정동 · 수집 ${P.collected_at||'—'}`;
+  document.getElementById('populationSource').innerHTML=src.url
+    ? `<a class="source" href="${esc(src.url)}" target="_blank" rel="noopener">${esc(src.dataset)} ↗</a>`
+    : '';
+
+  const populationKpis=[
+    ['서울 생활인구',fmt(P.total_population)+'명'],
+    ['행정동 범위',fmt(P.dong_count)+'곳'],
+    ['남성·여성 비율',`${P.male_rate??'—'}% · ${P.female_rate??'—'}%`],
+    ['주요 장소 비거주자',I.non_resident_rate==null?'—':I.non_resident_rate.toFixed(1)+'%']
+  ];
+  document.getElementById('populationKpis').innerHTML=populationKpis.map(k=>
+    `<div class="kpi"><div class="label">${k[0]}</div><div class="value">${k[1]}</div></div>`).join('');
+
+  document.getElementById('populationDongBoard').innerHTML=P.top_dongs.map(row=>
+    `<tr><td><b>${esc(row.dong)}</b></td><td>${esc(row.district)}</td>`+
+    `<td class="positive">${fmt(row.population)}명</td><td>${Number(row.share).toFixed(2)}%</td></tr>`
+  ).join('');
+
+  const districts=(P.by_district||[]).slice(0,10);
+  charts.populationDistrict=new Chart(document.getElementById('populationDistrictChart'),{
+    type:'bar',data:{labels:districts.map(x=>x.district),datasets:[{
+      data:districts.map(x=>x.population),backgroundColor:'#4e8fd8',borderRadius:4,barThickness:20}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmt(c.raw)+'명'}}},
+      scales:{x:{ticks:{color:'#8892b0',callback:v=>fmt(v)},grid:{color:'#1e2547'}},
+        y:{ticks:{color:'#b4c2f5'},grid:{display:false}}}}
+  });
+
+  charts.populationAge=new Chart(document.getElementById('populationAgeChart'),{
+    type:'bar',data:{labels:P.age_labels||[],datasets:[{
+      data:P.age_rates||[],backgroundColor:['#5f8fe8','#4ecca3','#f2b84b','#c989e8'],borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>Number(c.raw).toFixed(1)+'%'}}},
+      scales:{x:{ticks:{color:'#b4c2f5'},grid:{display:false}},
+        y:{beginAtZero:true,ticks:{color:'#8892b0',callback:v=>v+'%'},grid:{color:'#1e2547'}}}}
+  });
+
+  const forecasts=I.forecasts||[];
+  document.getElementById('populationForecastBoard').innerHTML=forecasts.length
+    ? forecasts.map(row=>{
+        const delta=row.delta_rate;
+        const cls=delta==null?'muted':delta>0?'warning':delta<0?'positive':'muted';
+        const deltaText=delta==null?'—':`${delta>0?'+':''}${Number(delta).toFixed(1)}%`;
+        return `<tr><td><b>${esc(row.area)}</b></td><td class="muted">${esc(shortTime(row.forecast_time))}</td>`+
+          `<td>${fmt(row.forecast_population)}명</td><td class="${cls}">${deltaText}</td>`+
+          `<td>${esc(row.congest_level||'—')}</td></tr>`;
+      }).join('')
+    : '<tr><td colspan="5" class="muted">현재 제공된 인구 예보가 없습니다.</td></tr>';
+  document.getElementById('populationNote').textContent=
+    `${src.freshness_note||''} 주요 장소 거주자 ${I.resident_rate??'—'}% · 비거주자 ${I.non_resident_rate??'—'}%는 실시간 도시데이터의 인구 가중 평균입니다.`;
 }
 
 function renderMobility(M){
