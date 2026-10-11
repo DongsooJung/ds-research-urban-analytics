@@ -213,3 +213,7 @@ MIT License
 ## 저자 · Author
 
 **정동수 (Dongsoo Jung)** — 서울대학교 박사과정 · 공간계량 & 도시분석
+
+---
+
+*Last automated check: 2026-10-11 16:49 KST*
