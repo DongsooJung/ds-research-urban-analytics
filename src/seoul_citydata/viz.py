@@ -240,8 +240,8 @@ _TEMPLATE = """<!DOCTYPE html>
   .kpi{background:#151933;border:1px solid #2a3354;border-radius:12px;padding:18px}
   .kpi .label{font-size:12px;color:#8892b0;margin-bottom:6px}
   .kpi .value{font-size:26px;font-weight:700;color:#8ab4f8}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
-  .panel{background:#151933;border:1px solid #2a3354;border-radius:12px;padding:20px}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-bottom:18px}
+  .panel{min-width:0;background:#151933;border:1px solid #2a3354;border-radius:12px;padding:20px}
   .panel h2{font-size:15px;color:#e0e6f0;margin-bottom:14px}
   .panel.full{grid-column:1/-1}
   .chart-box{position:relative;height:300px}
@@ -249,7 +249,7 @@ _TEMPLATE = """<!DOCTYPE html>
   th{text-align:left;color:#8892b0;padding:8px;border-bottom:1px solid #2a3354}
   td{padding:8px;border-bottom:1px solid #1e2547}
   .corr-pos{color:#4ecca3}.corr-neg{color:#e94560}
-  @media(max-width:768px){.grid{grid-template-columns:1fr}}
+  @media(max-width:768px){.grid{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -398,8 +398,8 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
     margin:34px 0 14px;padding-top:24px;border-top:1px solid #1e2547}
   .section-head h2{font-size:20px;color:#e0e6f0}
   .source{font-size:12px;color:#8892b0}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
-  .panel{background:#151933;border:1px solid #2a3354;border-radius:12px;padding:20px}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-bottom:18px}
+  .panel{min-width:0;background:#151933;border:1px solid #2a3354;border-radius:12px;padding:20px}
   .panel h2{font-size:15px;color:#e0e6f0;margin-bottom:6px}
   .panel .cap{font-size:12px;color:#8892b0;margin-bottom:12px}
   .panel.full{grid-column:1/-1}
@@ -433,7 +433,7 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
     margin:28px 0 14px;padding-top:20px;border-top:1px dashed #2a3354}
   .subsection-head h3{font-size:17px;color:#dce7f9}
   #err{color:#e94560;font-size:13px;margin:8px 0}
-  @media(max-width:768px){.grid{grid-template-columns:1fr}}
+  @media(max-width:768px){.grid{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -459,7 +459,7 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
         <div class="sub" id="populationSub"></div>
       </div>
       <div class="source-list">
-        <span class="freshness">D-4 통계</span>
+        <span class="freshness">행정동 자료 생산 종료 · 2026-07-31</span>
         <span id="populationSource"></span>
       </div>
     </div>
