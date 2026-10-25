@@ -55,7 +55,10 @@ http://swopenAPI.seoul.go.kr/api/subway/{KEY}/json/realtimeStationArrival/0/6/{�
 http://openapi.seoul.go.kr:8088/{KEY}/json/SPOP_LOCAL_RESD_DONG/1/1000/{기준일}/{시간대}
 ```
 
-생활인구는 실시간 값이 아니며 서울시 제공 일정에 따라 통상 D-4 기준으로 갱신된다.
+이 행정동 단위 내국인 생활인구는 서울시의 250m 격자 단위 전환에 따라 **2026년 7월 31일 이후 생산이 종료**됐다.
+화면은 과거 기준일의 자료를 보존하며, 이후 수집 시각은 기존 자료의 재조회 시각이다.
+9·10월 생활인구로 갱신된 것으로 해석하지 않는다. 새 격자 자료로 전환하려면 인구의 정의·외국인 포함 범위·비식별 기준·행정동 집계 호환성을 먼저 대조해야 한다.
+공식 종료 안내: <https://data.seoul.go.kr/dataList/OA-14991/A/1/datasetView.do>
 
 서울 열린데이터광장 「서울시 대도시권 생활인구(행정동별)」 (`se250mSpopOrgnCt`)
 

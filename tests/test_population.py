@@ -90,6 +90,10 @@ def test_build_population_dashboard_data():
     assert data["by_district"] == [{"district": "종로구", "population": 3000}]
     assert sum(data["age_rates"]) == pytest.approx(100.0, abs=0.2)
     assert data["source"]["service"] == "SPOP_LOCAL_RESD_DONG"
+    assert data["source"]["production_status"] == "discontinued"
+    assert data["source"]["production_ended_on"] == "2026-07-31"
+    assert data["reference_date"] == "20260721"
+    assert data["collected_at"] == "2026-07-26 09:00:00"
 
 
 def test_parse_admin_dong_mapping_from_official_xlsx_shape():

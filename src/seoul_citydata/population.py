@@ -330,9 +330,12 @@ def build_population_dashboard_data(
             "service": SERVICE,
             "url": DATASET_URL,
             "coverage": "서울 전역 행정동·시간대별 내국인 생활인구",
+            "production_status": "discontinued",
+            "production_ended_on": "2026-07-31",
             "freshness_note": (
-                "생활인구는 실시간 값이 아니며 서울시 제공 일정에 따라 "
-                "통상 D-4 기준으로 갱신됩니다."
+                "서울시는 250m 격자 단위 전환에 따라 이 행정동 자료의 생산을 "
+                "2026년 7월 31일 이후 종료했습니다. 표시값은 과거 기준일의 자료이며 "
+                "수집 시각은 재조회 시각입니다. 9·10월 생활인구로 해석하지 마세요."
             ),
         },
     }

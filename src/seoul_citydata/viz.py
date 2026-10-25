@@ -459,7 +459,7 @@ _SHELL_TEMPLATE = """<!DOCTYPE html>
         <div class="sub" id="populationSub"></div>
       </div>
       <div class="source-list">
-        <span class="freshness">D-4 통계</span>
+        <span class="freshness">행정동 자료 생산 종료 · 2026-07-31</span>
         <span id="populationSource"></span>
       </div>
     </div>
