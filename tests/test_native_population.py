@@ -37,3 +37,22 @@ def test_partial_month_cannot_be_called_complete(tmp_path):
 
 def test_unmasked_parts_must_equal_source_total(tmp_path):
     with pytest.raises(ValueError,match='do not match total'):import_archive(archive(tmp_path,[row(total='99')]),'202609',strict_month=False)
+
+def test_cli_csv_has_one_record_per_line_and_keeps_exact_values(tmp_path, monkeypatch):
+    import importlib.util
+    file=tmp_path/'month.zip'
+    with zipfile.ZipFile(file,'w') as z:
+        for day in range(1,31):
+            lines=[','.join(HEADER)]
+            for hour in range(24):
+                values=row();values[:2]=[f'202609{day:02d}',f'{hour:02d}'];lines.append(';'.join(values))
+            z.writestr(f'250_LOCAL_RESD_ADMDONG_202609{day:02d}.csv', ('\n'.join(lines)+'\n').encode('cp949'))
+    source=Path(__file__).resolve().parents[1]/'scripts/import_native_population.py'
+    spec=importlib.util.spec_from_file_location('native_cli',source);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    out=tmp_path/'published'
+    monkeypatch.setattr(sys,'argv',['importer',str(file),'--month','202609','--collected-at','2026-10-26T14:00:00+00:00','--output-dir',str(out)])
+    module.main()
+    data=(out/'native-population-202609.csv').read_bytes()
+    assert b'\r' not in data
+    assert len(data.decode('utf-8-sig').splitlines())==2
+    assert '28.00' in data.decode('utf-8-sig')
