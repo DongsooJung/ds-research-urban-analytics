@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "ds-research-urban-analytics"
+abstract: >-
+  Client and analysis code for Seoul open city data: population, mobility, native population, subway arrivals and congestion analysis for Korean urban research.
+type: software
+version: 0.1.0
+date-released: "2026-11-23"
+license: MIT
+repository-code: "https://github.com/DongsooJung/ds-research-urban-analytics"
+keywords:
+  - seoul
+  - urban-analytics
+  - open-data
+  - mobility
+  - population
+  - python
+authors:
+  - family-names: Jung
+    given-names: Dongsoo
+    affiliation: "Seoul National University, Department of Civil and Environmental Engineering"
