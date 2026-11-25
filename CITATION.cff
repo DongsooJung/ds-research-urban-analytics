@@ -1,20 +1,22 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "ds-research-urban-analytics"
+title: "ds-research-urban-analytics: Spatial econometric, hedonic, and DID analysis code for smart city research"
 abstract: >-
-  Client and analysis code for Seoul open city data: population, mobility, native population, subway arrivals and congestion analysis for Korean urban research.
+  Research code for smart city studies: spatial econometric models, hedonic
+  pricing, and difference-in-differences designs, with reproducible pipelines
+  from Korean public data.
 type: software
 version: 0.1.0
-date-released: "2026-11-23"
+date-released: "2026-11-25"
 license: MIT
 repository-code: "https://github.com/DongsooJung/ds-research-urban-analytics"
 keywords:
-  - seoul
-  - urban-analytics
-  - open-data
-  - mobility
-  - population
-  - python
+  - spatial econometrics
+  - hedonic pricing
+  - difference-in-differences
+  - smart city
+  - Korea
+  - reproducibility
 authors:
   - family-names: Jung
     given-names: Dongsoo
